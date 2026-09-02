@@ -172,8 +172,12 @@
       </div>
       <svg viewBox="0 0 24 24" style="width:18px;height:18px;color:var(--text-secondary);" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
     </div>
+    <div id="standings-shortcut-wrap" style="padding:0 16px 10px;">
+      <button onclick="viewStandingsDirect()" style="width:100%;background:var(--accent-bg);color:var(--accent-text);border:1px solid var(--accent-fill);border-radius:8px;padding:9px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">View Premier League standings</button>
+    </div>
     <div class="comp-pills" id="country-pills"></div>
     <div class="league-pills" id="league-pills"></div>
+    <div id="games-list"></div>
     <div class="no-games hidden" id="no-games-placeholder">No games loaded for this date yet — this would load automatically once the scraper is connected.</div>
     <div class="no-games hidden" id="other-league-placeholder">Not loaded yet.</div>
   </div>
@@ -191,7 +195,8 @@
     </div>
 
     <div class="tabs-row">
-      <div class="tab-pill active" onclick="selectTab(this,'lineup')">Lineup</div>
+      <div class="tab-pill active" onclick="selectTab(this,'summary')">Match summary</div>
+      <div class="tab-pill" onclick="selectTab(this,'lineup')">Lineup</div>
       <div class="tab-pill" onclick="selectTab(this,'season')">Season stats</div>
       <div class="tab-pill" onclick="selectTab(this,'alltime')">General stats</div>
       <div class="tab-pill" onclick="selectTab(this,'opponent')">Opponent stats</div>
@@ -300,7 +305,26 @@
       </div>
     </div>
 
-    <div class="panel active" id="panel-lineup">
+    <div class="panel active" id="panel-summary">
+      <div class="card" id="summary-status-card">
+        <h3>Status</h3>
+        <p class="body-text">Not fetched yet — open this tab to load, or tap "Fetch latest" below.</p>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Match timeline</h3>
+          <button onclick="fetchMatchDetailNow()" id="summary-fetch-btn" style="background:var(--accent-fill);color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Fetch latest</button>
+        </div>
+        <div id="summary-timeline"><p class="body-text">Not connected yet.</p></div>
+      </div>
+      <div class="card">
+        <h3>Full match stats</h3>
+        <div id="summary-stats-rows"></div>
+      </div>
+      <p class="disclaimer" id="summary-note">Not connected yet — layout ready for when a fixture is selected.</p>
+    </div>
+
+    <div class="panel" id="panel-lineup">
       <div class="subtabs">
         <div class="subtab-pill active" onclick="selectSubtab(this,'lineup-confirmed')">Confirmed</div>
         <div class="subtab-pill" onclick="selectSubtab(this,'lineup-projected')">Projected</div>
@@ -411,6 +435,8 @@
 <script>
   var generalStatsLoaded = false;
   var opponentStatsLoaded = false;
+  var summaryPollInterval = null;
+
   function selectTab(el, name) {
     document.querySelectorAll('.tabs-row .tab-pill').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
@@ -423,6 +449,14 @@
     if (name === 'opponent' && !opponentStatsLoaded) {
       opponentStatsLoaded = true;
       loadOpponentStats();
+    }
+    if (name === 'summary') {
+      loadMatchSummary();
+      if (summaryPollInterval) clearInterval(summaryPollInterval);
+      summaryPollInterval = setInterval(loadMatchSummary, 20000);
+    } else if (summaryPollInterval) {
+      clearInterval(summaryPollInterval);
+      summaryPollInterval = null;
     }
   }
   function selectSubtab(el, id) {
@@ -449,13 +483,18 @@
     document.getElementById('soccer-detail').classList.remove('hidden');
     window.scrollTo(0, 0);
   }
+  function viewStandingsDirect() {
+    showDetail();
+    var standingsBtn = document.querySelector(".tab-pill[onclick*=\"'standings'\"]");
+    if (standingsBtn) selectTab(standingsBtn, 'standings');
+  }
   function showList() {
     document.getElementById('soccer-detail').classList.add('hidden');
     document.getElementById('soccer-list').classList.remove('hidden');
     window.scrollTo(0, 0);
   }
 
-  var baseDate = new Date(2026, 7, 31);
+  var baseDate = new Date(); // was hardcoded to the old example's date (31 Aug 2026) — now genuinely "today"
   var dateOffset = 0;
   var dayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   var monthAbbr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -545,23 +584,52 @@
     updateListContent();
   }
 
-  function updateListContent() {
+  function dateStringForOffset(offset) {
+    var d = new Date(baseDate.getTime());
+    d.setDate(d.getDate() + offset);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  async function updateListContent() {
     var isPL = soccerCountries[activeCountryIdx].name === 'England' && activeCompName === 'Premier League';
     var otherPlaceholder = document.getElementById('other-league-placeholder');
     var noGames = document.getElementById('no-games-placeholder');
+    var gamesList = document.getElementById('games-list');
+    document.getElementById('standings-shortcut-wrap').classList.toggle('hidden', !isPL);
 
     if (!isPL) {
       noGames.classList.add('hidden');
+      gamesList.innerHTML = '';
       otherPlaceholder.classList.remove('hidden');
       otherPlaceholder.textContent = 'No games loaded for ' + activeCompName + ' yet — layout is ready, data is not connected.';
       return;
     }
     otherPlaceholder.classList.add('hidden');
-    noGames.classList.remove('hidden');
+
+    try {
+      var res = await fetch('/api/games?date=' + dateStringForOffset(dateOffset) + '&league=' + encodeURIComponent('Premier League'));
+      var data = await res.json();
+      if (!data.games || data.games.length === 0) {
+        noGames.classList.remove('hidden');
+        gamesList.innerHTML = '';
+        return;
+      }
+      noGames.classList.add('hidden');
+      gamesList.innerHTML = data.games.map(function(g) {
+        var time = g.kickoffUtc ? new Date(g.kickoffUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+        var scoreLine = (g.status === 'finished' || g.status === 'live') ? (g.homeScore + '-' + g.awayScore) : time;
+        return '<div class="game-list-card" onclick="openMatch(\'' + g.fixtureId + '\')"><div class="glc-top"><span>' + g.homeTeam + ' vs ' + g.awayTeam + '</span><span class="glc-time">' + scoreLine + '</span></div><div class="glc-sub">Premier League' + (g.status === 'live' ? ' · Live' : '') + '</div></div>';
+      }).join('');
+    } catch (err) {
+      noGames.classList.remove('hidden');
+      noGames.textContent = 'Could not reach the backend — ' + err.message;
+    }
   }
 
   renderCountryPills();
   renderLeaguePills();
+  document.getElementById('list-date-text').textContent = formatListDate(baseDate);
+  updateListContent();
 
   function loadAIResponse() {
     document.getElementById('ai-prompt').classList.add('hidden');
@@ -772,15 +840,152 @@
     }).join('');
   }
 
-  async function loadMatchData() {
-    // No scraper wired up yet in this pass — deliberately not fetching
-    // anything. Just showing honest empty states so the layout is fully
-    // visible without pretending there's real data behind it.
-    document.getElementById('injuries-source-note').textContent = 'Not connected yet — layout ready for when the scraper is wired in.';
-    document.getElementById('match-stats-card').innerHTML = '<h3>This match — live stats</h3><p class="body-text">Not connected yet.</p>';
-    document.getElementById('lineup-confirmed-card').innerHTML = '<h3>Confirmed lineups</h3><p class="body-text">Not connected yet.</p>';
+  function openMatch(fixtureId) {
+    currentSoccerFixtureId = fixtureId;
+    showDetail();
+    loadMatchData();
+    loadMatchSummary();
+    if (summaryPollInterval) clearInterval(summaryPollInterval);
+    summaryPollInterval = setInterval(loadMatchSummary, 20000);
   }
-  loadMatchData();
+
+  async function loadMatchData() {
+    var note = document.getElementById('injuries-source-note');
+    if (!currentSoccerFixtureId) {
+      note.textContent = 'Not connected yet — layout ready for when the scraper is wired in.';
+      return;
+    }
+    try {
+      var res = await fetch('/api/games/' + currentSoccerFixtureId);
+      var data = await res.json();
+      if (data.error) { note.textContent = data.error; return; }
+      var fx = data.fixture;
+      currentHomeTeam = fx.homeTeam;
+      currentAwayTeam = fx.awayTeam;
+
+      document.getElementById('match-home-crest').textContent = crestCode(fx.homeTeam);
+      document.getElementById('match-away-crest').textContent = crestCode(fx.awayTeam);
+      document.getElementById('match-home-name').textContent = fx.homeTeam;
+      document.getElementById('match-away-name').textContent = fx.awayTeam;
+      var kickoffStr = fx.kickoffUtc ? new Date(fx.kickoffUtc).toLocaleString() : 'Time TBC';
+      var statusNote = fx.status === 'finished' ? ' · FT ' + fx.homeScore + '-' + fx.awayScore
+        : fx.status === 'live' ? ' · Live, ' + fx.homeScore + '-' + fx.awayScore
+        : '';
+      document.getElementById('match-meta').textContent = kickoffStr + statusNote;
+
+      var homeInjuries = (data.injuries || []).filter(function(i) { return i.team === fx.homeTeam; });
+      var awayInjuries = (data.injuries || []).filter(function(i) { return i.team === fx.awayTeam; });
+      document.getElementById('injuries-home').innerHTML = injuryRowsHTML(homeInjuries);
+      document.getElementById('injuries-away').innerHTML = injuryRowsHTML(awayInjuries);
+      note.textContent = homeInjuries.length || awayInjuries.length ? 'Live from the backend.' : 'No injuries source connected yet.';
+
+      if (data.lineups && data.lineups.length > 0) {
+        var lhtml = '<h3>Confirmed lineups</h3>';
+        data.lineups.forEach(function(l) {
+          lhtml += '<p style="font-weight:600;margin-top:10px;">' + l.team + (l.formation ? ' (' + l.formation + ')' : '') + '</p>' + lineupRowsHTML(l.players);
+        });
+        document.getElementById('lineup-confirmed-card').innerHTML = lhtml;
+      } else {
+        document.getElementById('lineup-confirmed-card').innerHTML = '<h3>Confirmed lineups</h3><p class="body-text">Not fetched yet — open Match Summary.</p>';
+      }
+
+      if (data.matchDetail) {
+        document.getElementById('match-stats-card').innerHTML = '<h3>This match — live stats</h3>' + matchStatsHTML(data.matchDetail.stats);
+      } else {
+        document.getElementById('match-stats-card').innerHTML = '<h3>This match — live stats</h3><p class="body-text">Not fetched yet — open Match Summary.</p>';
+      }
+    } catch (err) {
+      note.textContent = 'Could not reach the backend — ' + err.message;
+    }
+  }
+
+  function timelineHTML(incidents) {
+    if (!incidents || incidents.length === 0) return '<p class="body-text">No incidents recorded.</p>';
+    return incidents.map(function(inc) {
+      var minute = inc.minute || '';
+      var teamLabel = inc.team === 'home' ? currentHomeTeam : (inc.team === 'away' ? currentAwayTeam : '');
+      var eventsHtml = (inc.events || []).map(function(ev) {
+        var icon = '';
+        if (ev.type === 'Goal') icon = '⚽';
+        else if (ev.type === 'Yellow Card') icon = '🟨';
+        else if (ev.type === 'Red Card') icon = '🟥';
+        else if (ev.type === 'Substitution - In') icon = '↑';
+        else if (ev.type === 'Substitution - Out') icon = '↓';
+        else if (ev.type === 'Assistance') icon = '🅰️';
+        return '<div style="padding-left:12px;font-size:13px;">' + icon + ' ' + (ev.player || '') + ' <span style="color:var(--text-muted);font-size:11px;">(' + ev.type + ')</span></div>';
+      }).join('');
+      return '<div class="meeting-row" style="flex-direction:column;align-items:flex-start;gap:2px;padding:8px 0;"><strong>' + minute + ' — ' + teamLabel + '</strong>' + eventsHtml + '</div>';
+    }).join('');
+  }
+
+  async function loadMatchSummary() {
+    var note = document.getElementById('summary-note');
+    var statusCard = document.getElementById('summary-status-card');
+    if (!currentSoccerFixtureId) {
+      note.textContent = 'Not connected yet — layout ready for when a fixture is selected.';
+      return;
+    }
+    try {
+      var res = await fetch('/api/games/' + currentSoccerFixtureId);
+      var data = await res.json();
+      if (data.error) { note.textContent = data.error; return; }
+      var fx = data.fixture;
+      var md = data.matchDetail;
+
+      var statusLine = fx.status === 'live' ? '🔴 Live now'
+        : fx.status === 'finished' ? 'Full-time'
+        : 'Not started';
+      var scoreLine = (fx.homeScore != null && fx.awayScore != null) ? fx.homeScore + ' - ' + fx.awayScore : 'vs';
+      statusCard.innerHTML = '<h3>Status</h3><p style="font-size:20px;font-weight:700;margin:4px 0;">' + fx.homeTeam + ' ' + scoreLine + ' ' + fx.awayTeam + '</p><p class="body-text">' + statusLine + (md && md.updatedAt ? ' · updated ' + new Date(md.updatedAt).toLocaleTimeString() : '') + '</p>';
+
+      if (md) {
+        document.getElementById('summary-timeline').innerHTML = timelineHTML(md.incidents);
+        document.getElementById('summary-stats-rows').innerHTML = statRowsHTML(buildRawStatRows(md.stats));
+        note.textContent = 'Last fetched ' + new Date(md.updatedAt).toLocaleString() + '.';
+      } else {
+        document.getElementById('summary-timeline').innerHTML = '<p class="body-text">Not fetched yet — tap "Fetch latest".</p>';
+        document.getElementById('summary-stats-rows').innerHTML = '';
+        note.textContent = 'Not fetched yet for this match.';
+      }
+    } catch (err) {
+      note.textContent = 'Could not reach the backend — ' + err.message;
+    }
+  }
+
+  function buildRawStatRows(stats) {
+    if (!stats || stats.length === 0) return [];
+    var seen = {};
+    var rows = [];
+    stats.filter(function(s) { return s.period === 'Match'; }).forEach(function(s) {
+      if (seen[s.stat]) return;
+      seen[s.stat] = true;
+      rows.push([s.home, s.stat, s.away, 50, 50]);
+    });
+    return rows;
+  }
+
+  async function fetchMatchDetailNow() {
+    if (!currentSoccerFixtureId) return;
+    var btn = document.getElementById('summary-fetch-btn');
+    var note = document.getElementById('summary-note');
+    btn.disabled = true;
+    btn.textContent = 'Fetching…';
+    note.textContent = 'Reaching out to Flashscore…';
+    try {
+      var res = await fetch('/api/admin/fetch-match-detail/' + currentSoccerFixtureId, { method: 'POST' });
+      var data = await res.json();
+      if (data.success) {
+        await loadMatchSummary();
+        await loadMatchData();
+      } else {
+        note.textContent = 'Failed — ' + (data.error || 'unknown error');
+      }
+    } catch (err) {
+      note.textContent = 'Could not reach the backend — ' + err.message;
+    }
+    btn.disabled = false;
+    btn.textContent = 'Fetch latest';
+  }
 
   function newsSourcesHTML(sources) {
     if (!sources || sources.length === 0) {

@@ -55,7 +55,24 @@ router.get('/:fixtureId', (req, res) => {
     .prepare(`SELECT team, formation, players_json AS playersJson, confirmed FROM lineups WHERE fixture_id = ?`)
     .all(fixtureId);
 
-  res.json({ fixture, injuries, h2h, lineups: lineups.map((l) => ({ ...l, players: JSON.parse(l.playersJson || '[]') })) });
+  const matchDetail = db
+    .prepare(`SELECT core_json AS coreJson, stats_json AS statsJson, incidents_json AS incidentsJson, updated_at AS updatedAt FROM match_detail WHERE fixture_id = ?`)
+    .get(fixtureId);
+
+  res.json({
+    fixture,
+    injuries,
+    h2h,
+    lineups: lineups.map((l) => ({ ...l, players: JSON.parse(l.playersJson || '[]') })),
+    matchDetail: matchDetail
+      ? {
+          core: JSON.parse(matchDetail.coreJson || 'null'),
+          stats: JSON.parse(matchDetail.statsJson || '[]'),
+          incidents: JSON.parse(matchDetail.incidentsJson || '[]'),
+          updatedAt: matchDetail.updatedAt
+        }
+      : null
+  });
 });
 
 module.exports = router;

@@ -18,7 +18,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     from flashscore_scraper.standings import get_standings
+    from rate_limiter import wait_for_rate_limit
 
+    wait_for_rate_limit()
     rows = get_standings("england", "premier-league", sport="football")
 
     result = {

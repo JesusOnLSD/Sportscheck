@@ -72,10 +72,31 @@ app.get('/api/admin/python-check', async (req, res) => {
   }
 });
 
+// Simple cooldown shared across every scraper-triggering route. The
+// Python rate limiter (50/min) only protects calls *within* one script's
+// run — each spawn is a fresh process, so its in-memory timing resets
+// every time. This is the separate protection against rapid REPEATED
+// invocations — someone reloading the page a few times quickly, or
+// mashing "Fetch now" — which the Python-side limiter alone can't catch.
+let lastFetchTime = 0;
+const FETCH_COOLDOWN_MS = 15000;
+
+function checkFetchCooldown(res) {
+  const now = Date.now();
+  if (now - lastFetchTime < FETCH_COOLDOWN_MS) {
+    const waitSec = Math.ceil((FETCH_COOLDOWN_MS - (now - lastFetchTime)) / 1000);
+    res.status(429).json({ error: `Please wait ${waitSec}s before fetching again.` });
+    return false;
+  }
+  lastFetchTime = now;
+  return true;
+}
+
 // The one real pipeline for this pass: spawn the scraper, get Premier
 // League standings, store them. Everything else (other leagues, other
 // sports, other data types) follows this exact same pattern later.
 app.post('/api/admin/fetch-standings', async (req, res) => {
+  if (!checkFetchCooldown(res)) return;
   const scriptPath = path.join(__dirname, '..', 'scraper', 'fetch_standings.py');
   const result = await runPythonScript(scriptPath);
 
@@ -107,6 +128,96 @@ app.post('/api/admin/fetch-standings', async (req, res) => {
 
   console.log(`[scraper] Fetched and stored ${count} Premier League standings rows`);
   res.json({ success: true, stored: count });
+});
+
+// Fetches a window of days (today ± 3) of Premier League fixtures.
+app.post('/api/admin/fetch-fixtures', async (req, res) => {
+  if (!checkFetchCooldown(res)) return;
+  const scriptPath = path.join(__dirname, '..', 'scraper', 'fetch_fixtures.py');
+  const result = await runPythonScript(scriptPath);
+
+  if (!result.success) {
+    return res.status(500).json({ error: result.error || 'Unknown scraper error' });
+  }
+
+  const now = new Date().toISOString();
+  const upsert = db.prepare(`
+    INSERT INTO fixtures (fixture_id, league, season, kickoff_utc, home_team, away_team, venue, status, home_score, away_score, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(fixture_id) DO UPDATE SET
+      kickoff_utc=excluded.kickoff_utc, status=excluded.status, home_score=excluded.home_score,
+      away_score=excluded.away_score, updated_at=excluded.updated_at
+  `);
+  let count = 0;
+  db.exec('BEGIN');
+  try {
+    for (const f of result.fixtures) {
+      upsert.run(f.fixtureId, 'Premier League', '2026', f.kickoffUtc, f.homeTeam, f.awayTeam, null, f.status, f.homeScore, f.awayScore, now);
+      count++;
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+
+  console.log(`[scraper] Fetched and stored ${count} Premier League fixtures`);
+  res.json({ success: true, stored: count });
+});
+
+// Full match detail — core status, timeline incidents, all stats,
+// lineups — for one specific fixture. This is what powers the Match
+// Summary tab, and is meant to be called both on demand (clicking into a
+// match) and repeatedly while that tab is open, to reflect a live score.
+app.post('/api/admin/fetch-match-detail/:fixtureId', async (req, res) => {
+  if (!checkFetchCooldown(res)) return;
+  const { fixtureId } = req.params;
+
+  const fixture = db.prepare('SELECT home_team AS homeTeam, away_team AS awayTeam FROM fixtures WHERE fixture_id = ?').get(fixtureId);
+  if (!fixture) {
+    return res.status(404).json({ error: 'No cached fixture with that ID — fetch fixtures first.' });
+  }
+
+  const scriptPath = path.join(__dirname, '..', 'scraper', 'fetch_match_detail.py');
+  const result = await runPythonScript(scriptPath, [fixtureId]);
+
+  if (!result.success) {
+    return res.status(500).json({ error: result.error || 'Unknown scraper error' });
+  }
+
+  const now = new Date().toISOString();
+  try {
+    db.prepare(`
+      INSERT INTO match_detail (fixture_id, core_json, stats_json, incidents_json, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(fixture_id) DO UPDATE SET
+        core_json=excluded.core_json, stats_json=excluded.stats_json, incidents_json=excluded.incidents_json, updated_at=excluded.updated_at
+    `).run(fixtureId, JSON.stringify(result.core || null), JSON.stringify(result.stats || []), JSON.stringify(result.incidents || []), now);
+
+    // Relabel home/away-keyed lineups with the fixture's real team names —
+    // the Python side deliberately doesn't know these, Node already does.
+    const raw = result.rawLineups;
+    if (raw) {
+      const upsertLineup = db.prepare(`
+        INSERT INTO lineups (fixture_id, team, formation, players_json, confirmed, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(fixture_id, team) DO UPDATE SET
+          formation=excluded.formation, players_json=excluded.players_json, confirmed=excluded.confirmed, updated_at=excluded.updated_at
+      `);
+      const formations = raw.formation || {};
+      if (raw.home && raw.home.length) {
+        upsertLineup.run(fixtureId, fixture.homeTeam, formations.home || null, JSON.stringify(raw.home), 1, now);
+      }
+      if (raw.away && raw.away.length) {
+        upsertLineup.run(fixtureId, fixture.awayTeam, formations.away || null, JSON.stringify(raw.away), 1, now);
+      }
+    }
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+
+  console.log(`[scraper] Fetched and stored match detail for fixture ${fixtureId}`);
+  res.json({ success: true, fixtureId });
 });
 
 // Serve the frontend (the HTML/CSS/JS files) as static assets.
