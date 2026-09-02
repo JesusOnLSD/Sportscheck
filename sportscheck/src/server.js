@@ -6,6 +6,7 @@ const util = require('util');
 const execFileAsync = util.promisify(execFile);
 
 const standingsRoute = require('./routes/standings');
+const scorersRoute = require('./routes/scorers');
 const gamesRoute = require('./routes/games');
 const aiRoute = require('./routes/ai');
 const newsRoute = require('./routes/news');
@@ -20,6 +21,7 @@ app.use(express.json());
 // re-enabled) don't need route changes later — same tables, same shapes,
 // just empty for now.
 app.use('/api/standings', standingsRoute);
+app.use('/api/scorers', scorersRoute);
 app.use('/api/games', gamesRoute);
 app.use('/api/ai', aiRoute);
 app.use('/api/news', newsRoute);
@@ -131,6 +133,42 @@ app.post('/api/admin/fetch-standings', async (req, res) => {
   }
 
   console.log(`[scraper] Fetched and stored ${count} Premier League standings rows`);
+  res.json({ success: true, stored: count });
+});
+
+// Top scorers, current season only — same league/season scoping as
+// standings, just a different data type.
+app.post('/api/admin/fetch-scorers', async (req, res) => {
+  if (!checkFetchCooldown(res, 'scorers')) return;
+  const scriptPath = path.join(__dirname, '..', 'scraper', 'fetch_top_scorers.py');
+  const result = await runPythonScript(scriptPath);
+
+  if (!result.success) {
+    return res.status(500).json({ error: result.error || 'Unknown scraper error' });
+  }
+
+  const now = new Date().toISOString();
+  const upsert = db.prepare(`
+    INSERT INTO scorers (league, season, rank, player, team, goals, assists, nationality, position_name, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(league, season, player, team) DO UPDATE SET
+      rank=excluded.rank, goals=excluded.goals, assists=excluded.assists,
+      nationality=excluded.nationality, position_name=excluded.position_name, updated_at=excluded.updated_at
+  `);
+  let count = 0;
+  db.exec('BEGIN');
+  try {
+    for (const r of result.scorers) {
+      upsert.run('Premier League', '2026', r.rank, r.player, r.team, r.goals, r.assists, r.nationality, r.position, now);
+      count++;
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+
+  console.log(`[scraper] Fetched and stored ${count} Premier League top scorers`);
   res.json({ success: true, stored: count });
 });
 

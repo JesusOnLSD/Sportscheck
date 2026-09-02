@@ -170,9 +170,6 @@
         </div>
         <svg viewBox="0 0 24 24" style="width:22px;height:22px;color:var(--text-secondary);cursor:pointer;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
       </div>
-      <div class="comp-pills" id="standings-shortcut-wrap" style="padding:0 24px 12px;">
-        <button id="standings-shortcut-btn" onclick="viewStandingsDirect()" style="background:var(--accent-bg);color:var(--accent-text);border:1px solid var(--accent-fill);border-radius:8px;padding:8px 14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">View Premier League standings</button>
-      </div>
       <div class="comp-pills" id="country-pills"></div>
       <div class="league-pills" id="league-pills"></div>
       <div id="games-list"></div>
@@ -207,10 +204,6 @@
 
       <!-- SEASON STATS -->
       <div class="panel" id="panel-season">
-        <div class="card" id="match-stats-card">
-          <h3>This match — live stats</h3>
-          <p class="body-text">Not connected yet.</p>
-        </div>
         <div class="grid-2">
           <div class="card">
             <h3>Season so far</h3>
@@ -224,21 +217,21 @@
             <div id="season-rows"></div>
           </div>
         </div>
-        <p class="disclaimer">Not connected yet — same full stat set as General and Opponent stats, but scoped to the current season only once the scraper is wired in (the card above is this one match specifically; the per-game averages below are the season, not just this match).</p>
+        <p class="disclaimer">Not connected yet — same full stat set as General and Opponent stats, scoped to the current season only once the scraper is wired in. This match's own live stats live on the Match Summary tab.</p>
       </div>
 
       <!-- ALL-TIME STATS -->
       <div class="panel" id="panel-alltime">
         <div class="grid-2">
           <div class="card">
-            <h3>Totals (last 2 years)</h3>
+            <h3>Totals (last 5 years)</h3>
             <table class="data" id="alltime-totals-table">
               <tr><th></th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>Pts</th></tr>
               <tr><td colspan="8" style="color:var(--text-muted);">Not connected yet</td></tr>
             </table>
           </div>
           <div class="card">
-            <h3>Per-game averages (last 2 years)</h3>
+            <h3>Per-game averages (last 5 years)</h3>
             <div id="alltime-rows"></div>
           </div>
         </div>
@@ -248,11 +241,11 @@
       <!-- OPPONENT STATS -->
       <div class="panel" id="panel-opponent">
         <div class="card">
-          <h3>Per-meeting averages (last 2 years)</h3>
+          <h3>Per-meeting averages (last 5 years)</h3>
           <div id="opponent-rows"></div>
         </div>
         <div class="card">
-          <h3>Head-to-head record (last 2 years)</h3>
+          <h3>Head-to-head record (last 5 years)</h3>
           <div id="opponent-h2h-bar"><p class="body-text">Not loaded yet.</p></div>
           <p class="disclaimer" id="opponent-note">Real data fetches the first time you open this tab, not on every page load — keeps this to one heavier check instead of running on every visit.</p>
         </div>
@@ -367,7 +360,7 @@
         <div class="card">
           <h3>Head-to-head snapshot</h3>
           <div id="form-h2h"><p class="body-text">Not connected yet.</p></div>
-          <p class="disclaimer">Last 2 years, once connected — full breakdown on the Opponent stats tab.</p>
+          <p class="disclaimer">Last 5 years, once connected — full breakdown on the Opponent stats tab.</p>
         </div>
       </div>
 
@@ -506,11 +499,6 @@
   // No real fixture to click into yet (only standings are fetched so far,
   // not match schedules) — this jumps straight to the Standings tab
   // without needing a match, so fetched data is actually reachable.
-  function viewStandingsDirect() {
-    showDetail();
-    var standingsBtn = document.querySelector(".tab-btn[onclick*=\"'standings'\"]");
-    if (standingsBtn) selectTab(standingsBtn, 'standings');
-  }
   function showList() {
     document.getElementById('soccer-detail').classList.add('hidden');
     document.getElementById('soccer-list').classList.remove('hidden');
@@ -620,10 +608,6 @@
     var otherPlaceholder = document.getElementById('other-league-placeholder');
     var noGames = document.getElementById('no-games-placeholder');
     var gamesList = document.getElementById('games-list');
-    // Only the currently-connected league gets this shortcut — same
-    // pattern to extend when other leagues get their own real data later:
-    // one shortcut button each, shown only while that league is active.
-    document.getElementById('standings-shortcut-wrap').classList.toggle('hidden', !isPL);
 
     if (!isPL) {
       noGames.classList.add('hidden');
@@ -798,7 +782,23 @@
       var stbl = document.getElementById('scorers-table-el');
       var stitle = document.getElementById('scorers-title');
       stitle.textContent = 'Premier League — top scorers, ' + year;
-      stbl.innerHTML = '<tr><th>#</th><th>Player</th><th>Team</th><th>Pts</th><th>Goals</th><th>Assists</th></tr><tr><td colspan="6" style="color:var(--text-muted);">Not connected yet — top scorers isn\'t built in the scraper pipeline yet.</td></tr>';
+      stbl.innerHTML = '<tr><td style="padding:20px 4px;color:var(--text-muted);">Loading…</td></tr>';
+      try {
+        var sres = await fetch('/api/scorers?league=' + encodeURIComponent('Premier League') + '&season=' + apiSeasonFromLabel(year));
+        var sdata = await sres.json();
+        if (!sdata.loaded || !sdata.scorers || sdata.scorers.length === 0) {
+          stbl.innerHTML = '<tr><td style="padding:20px 4px;color:var(--text-muted);">Not connected yet — click "Fetch now" in the sidebar.</td></tr>';
+          return;
+        }
+        stitle.textContent = 'Premier League — updated ' + new Date(sdata.updatedAt).toLocaleString();
+        var shtml = '<tr><th>#</th><th>Player</th><th>Team</th><th>Goals</th><th>Assists</th></tr>';
+        sdata.scorers.forEach(function(r) {
+          shtml += '<tr><td class="num">' + r.rank + '</td><td>' + r.player + '</td><td>' + r.team + '</td><td class="num"><strong>' + r.goals + '</strong></td><td class="num">' + r.assists + '</td></tr>';
+        });
+        stbl.innerHTML = shtml;
+      } catch (err) {
+        stbl.innerHTML = '<tr><td style="padding:20px 4px;color:var(--text-muted);">Could not reach the backend — ' + err.message + '</td></tr>';
+      }
     }
   }
   document.getElementById('standings-year-select').value = '2026-27';
@@ -828,12 +828,17 @@
       var fixturesRes = await fetch('/api/admin/fetch-fixtures', { method: 'POST' });
       var fixturesData = await fixturesRes.json();
 
-      if (fixturesData.success) {
-        status.textContent = standingsData.stored + ' teams, ' + fixturesData.stored + ' fixtures updated just now.';
-      } else {
-        status.textContent = standingsData.stored + ' teams updated. Fixtures failed — ' + (fixturesData.error || 'unknown error');
-      }
+      status.textContent = standingsData.stored + ' teams, ' + (fixturesData.success ? fixturesData.stored + ' fixtures' : 'fixtures failed') + '. Fetching top scorers…';
+      var scorersRes = await fetch('/api/admin/fetch-scorers', { method: 'POST' });
+      var scorersData = await scorersRes.json();
+
+      var parts = [standingsData.stored + ' teams'];
+      parts.push(fixturesData.success ? fixturesData.stored + ' fixtures' : 'fixtures failed');
+      parts.push(scorersData.success ? scorersData.stored + ' scorers' : 'scorers failed');
+      status.textContent = parts.join(', ') + ' updated just now.';
+
       selectYear('standings', document.getElementById('standings-year-select').value);
+      selectYear('scorers', document.getElementById('scorers-year-select').value);
       updateListContent(); // so newly-fetched fixtures show up without a manual reload
     } catch (err) {
       status.textContent = 'Could not reach the backend — ' + err.message;
@@ -857,25 +862,6 @@
 
   function crestCode(teamName) {
     return (teamName || '???').split(' ').map(function(w) { return w[0]; }).join('').slice(0, 3).toUpperCase();
-  }
-
-  function matchStatsHTML(stats) {
-    if (!stats || stats.length === 0) return '<p class="body-text">No stats available for this match yet.</p>';
-    var byPeriod = {};
-    stats.forEach(function(s) {
-      var p = s.period || 'Match';
-      if (!byPeriod[p]) byPeriod[p] = [];
-      byPeriod[p].push(s);
-    });
-    var order = ['Match', '1st Half', '2nd Half'];
-    var html = '';
-    order.filter(function(p) { return byPeriod[p]; }).forEach(function(p) {
-      html += '<p style="font-weight:600;margin:10px 0 4px;">' + p + '</p>';
-      byPeriod[p].forEach(function(s) {
-        html += '<div class="stat-row"><div class="labels"><span>' + s.home + '</span><span>' + s.stat + '</span><span>' + s.away + '</span></div></div>';
-      });
-    });
-    return html;
   }
 
   function lineupRowsHTML(players) {
@@ -935,12 +921,6 @@
         document.getElementById('lineup-confirmed-card').innerHTML = lhtml;
       } else {
         document.getElementById('lineup-confirmed-card').innerHTML = '<h3>Confirmed lineups</h3><p class="body-text">Not fetched yet — open the Match Summary tab to fetch full match detail.</p>';
-      }
-
-      if (data.matchDetail) {
-        document.getElementById('match-stats-card').innerHTML = '<h3>This match — live stats</h3>' + matchStatsHTML(data.matchDetail.stats);
-      } else {
-        document.getElementById('match-stats-card').innerHTML = '<h3>This match — live stats</h3><p class="body-text">Not fetched yet — open the Match Summary tab.</p>';
       }
     } catch (err) {
       note.textContent = 'Could not reach the backend — ' + err.message;

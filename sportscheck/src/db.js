@@ -35,6 +35,20 @@ db.exec(`
     PRIMARY KEY (league, season, team)
   );
 
+  CREATE TABLE IF NOT EXISTS scorers (
+    league TEXT NOT NULL,
+    season TEXT NOT NULL,
+    rank INTEGER,
+    player TEXT,
+    team TEXT,
+    goals INTEGER,
+    assists INTEGER,
+    nationality TEXT,
+    position_name TEXT,
+    updated_at TEXT,
+    PRIMARY KEY (league, season, player, team)
+  );
+
   CREATE TABLE IF NOT EXISTS fixtures (
     fixture_id TEXT PRIMARY KEY,
     league TEXT,
