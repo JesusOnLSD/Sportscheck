@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sportscheck</title>
+<style>
+  body { margin:0; background:#12161c; color:#E8ECF1; font-family:-apple-system,sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; text-align:center; }
+  a { color:#7FCBFF; }
+</style>
+</head>
+<body>
+  <div>
+    <p>Redirecting…</p>
+    <p><a href="/desktop.html">Desktop version</a> · <a href="/mobile.html">Mobile version</a></p>
+  </div>
+  <script>
+    // Simple width-based redirect — swap for something smarter later if needed.
+    window.location.href = window.innerWidth < 700 ? '/mobile.html' : '/desktop.html';
+  </script>
+</body>
+</html>

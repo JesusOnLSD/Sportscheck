@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sportscheck — desktop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #12161c; --surface: #1a212b; --surface-raised: #212a37; --border: #2b3542;
+    --text: #E8ECF1; --text-secondary: #9AA7B5; --text-muted: #64707D;
+    --accent-bg: #1c3650; --accent-text: #7FCBFF; --accent-fill: #3E92D1;
+    --win-bg: #17301f; --win-text: #6FD98A; --loss-bg: #351a1a; --loss-text: #F28B8B;
+    --draw-bg: #2c2a1e; --draw-text: #D8B76A; --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 19px; line-height: 1.55; }
+
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar { width: 269px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); padding: 29px 0; }
+  .wordmark { font-size: 23px; font-weight: 700; padding: 0 29px 29px; letter-spacing: -0.01em; }
+  .sport-item { padding: 13px 29px; font-size: 18px; font-weight: 500; color: var(--text-secondary); cursor: pointer; border-left: 3px solid transparent; display: flex; justify-content: space-between; align-items: center; }
+  .sport-item.active { color: var(--text); background: var(--surface-raised); border-left-color: var(--accent-fill); }
+  .sport-item .soon { font-size: 13px; color: var(--text-muted); border: 1px solid var(--border); padding: 1px 7px; border-radius: 20px; }
+
+  .main { flex: 1; padding: 38px 53px; max-width: 1344px; }
+  .breadcrumb { font-size: 16px; color: var(--text-muted); margin-bottom: 10px; }
+  .teams-row { display: flex; align-items: center; gap: 22px; }
+  .crest { width: 65px; height: 65px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 17px; flex-shrink: 0; }
+  .vs-title { font-size: 32px; font-weight: 700; letter-spacing: -0.01em; }
+  .kickoff-meta { font-size: 17px; color: var(--text-secondary); margin-top: 7px; }
+
+  .tabs-row { display: flex; gap: 5px; border-bottom: 1px solid var(--border); margin: 34px 0 31px; flex-wrap: wrap; }
+  .tab-btn { padding: 13px 18px; font-size: 17px; font-weight: 500; color: var(--text-secondary); cursor: pointer; border: none; background: none; border-bottom: 3px solid transparent; font-family: inherit; }
+  .tab-btn.active { color: var(--text); border-bottom-color: var(--accent-fill); }
+  .tab-btn:hover { color: var(--text); }
+
+  .subtabs { display: flex; gap: 10px; margin-bottom: 24px; }
+  .subtab-btn { padding: 8px 19px; font-size: 16px; font-weight: 600; color: var(--text-secondary); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; font-family: inherit; }
+  .subtab-btn.active { background: var(--accent-fill); color: #0B141C; border-color: var(--accent-fill); }
+  .subpanel { display: none; }
+  .subpanel.active { display: block; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 24px; }
+  .card h3 { margin: 0 0 19px; font-size: 18px; font-weight: 600; color: var(--text-secondary); }
+
+  table.data { width: 100%; border-collapse: collapse; font-size: 17px; }
+  table.data th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 16px; padding: 11px 10px; border-bottom: 1px solid var(--border); }
+  table.data td { padding: 11px 10px; border-bottom: 1px solid var(--border); }
+  table.data tr:last-child td { border-bottom: none; }
+  table.data tr.highlight td { background: var(--surface-raised); }
+  table.data td.num { text-align: center; color: var(--text-secondary); }
+
+  .stat-row { margin-bottom: 19px; }
+  .stat-row:last-child { margin-bottom: 0; }
+  .stat-row .labels { display: flex; justify-content: space-between; font-size: 16px; color: var(--text-secondary); margin-bottom: 7px; }
+  .bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--border); }
+  .bar div.a { background: var(--text-muted); }
+  .bar div.b { background: var(--accent-fill); }
+
+  .pill { display: inline-block; width: 25px; height: 25px; line-height: 25px; text-align: center; border-radius: 6px; font-size: 14px; font-weight: 700; margin-right: 10px; }
+  .pill.win { background: var(--win-bg); color: var(--win-text); }
+  .pill.loss { background: var(--loss-bg); color: var(--loss-text); }
+  .pill.draw { background: var(--draw-bg); color: var(--draw-text); }
+
+  .injury-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 17px; }
+  .injury-row:last-child { border-bottom: none; }
+  .injury-name { font-weight: 500; }
+  .injury-issue { color: var(--text-muted); font-size: 16px; margin-top: 2px; }
+  .status-tag { font-size: 14px; font-weight: 600; padding: 4px 11px; border-radius: 7px; white-space: nowrap; }
+  .status-tag.out { background: var(--loss-bg); color: var(--loss-text); }
+  .status-tag.doubt { background: var(--draw-bg); color: var(--draw-text); }
+
+  .pick-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 19px; margin-bottom: 24px; }
+  .pick-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 29px 19px; text-align: center; }
+  .pick-box.lead { border-color: var(--accent-fill); }
+  .pick-pct { font-size: 38px; font-weight: 700; margin: 5px 0 5px; }
+  .pick-label { font-size: 16px; color: var(--text-secondary); }
+
+  .meeting-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 17px; }
+  .meeting-row:last-child { border-bottom: none; }
+  .meeting-date { color: var(--text-muted); font-size: 16px; width: 108px; flex-shrink: 0; }
+  .meeting-comp { color: var(--text-muted); font-size: 15px; }
+
+  .season-select { padding: 8px 14px; font-size: 16px; font-weight: 600; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; font-family: inherit; margin-bottom: 24px; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239AA7B5' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; }
+
+  .lineup-xi { font-size: 17px; color: var(--text-secondary); line-height: 2.1; }
+  .lineup-formation { font-size: 16px; color: var(--text-muted); margin-bottom: 12px; }
+
+  .pitch { position: relative; width: 50%; margin: 0 auto; aspect-ratio: 3 / 4; background: repeating-linear-gradient(to bottom, #2b6b3f, #2b6b3f 11%, #2f7645 11%, #2f7645 22%); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  .pitch::before { content:''; position:absolute; left:0; right:0; top:50%; height:2px; background:rgba(255,255,255,0.35); }
+  .pitch::after { content:''; position:absolute; left:50%; top:50%; width:15%; aspect-ratio:1/1; border:2px solid rgba(255,255,255,0.35); border-radius:50%; transform:translate(-50%,-50%); }
+  .pitch-box { position:absolute; left:50%; width:44%; height:13%; border:2px solid rgba(255,255,255,0.35); transform:translateX(-50%); }
+  .pitch-box.top { top:0; border-top:none; }
+  .pitch-box.bottom { bottom:0; border-bottom:none; }
+  .player { position: absolute; transform: translate(-50%, -50%); text-align: center; width: 66px; }
+  .shirt { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; color: #fff; margin: 0 auto; box-shadow: 0 2px 6px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.5); }
+  .pname { font-size: 13px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.8); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  p.body-text { font-size: 18px; line-height: 1.8; color: var(--text-secondary); margin: 0 0 17px; }
+  p.disclaimer { font-size: 15px; color: var(--text-muted); margin: 14px 0 0; }
+  .hidden { display: none; }
+  .placeholder { text-align: center; padding: 120px 24px; color: var(--text-muted); font-size: 19px; }
+
+  .list-header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 24px; }
+  .list-title { font-size: 16px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent-text); margin: 0 0 6px; }
+  .date-nav { display: flex; align-items: center; gap: 8px; }
+  .list-date { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); margin: 0; min-width: 210px; text-align: center; }
+  .date-arrow { font-size: 28px; color: var(--text); cursor: pointer; padding: 6px; border-radius: 8px; display: flex; }
+  .date-arrow:hover { background: var(--surface-raised); color: var(--text); }
+  .date-arrow.disabled { color: var(--border); cursor: not-allowed; pointer-events: none; }
+  .no-games { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 17px; }
+
+  .ai-prompt { text-align: center; padding: 44px 24px; }
+  .ai-prompt p { font-size: 17px; color: var(--text-secondary); margin: 0 0 20px; max-width: 460px; margin-left: auto; margin-right: auto; }
+  .load-btn { background: var(--accent-fill); color: #0B141C; font-size: 16px; font-weight: 600; border: none; padding: 12px 26px; border-radius: 999px; cursor: pointer; font-family: inherit; }
+  .load-btn:hover { opacity: 0.9; }
+  .ai-loading { text-align: center; padding: 50px 24px; }
+  .spinner { width: 30px; height: 30px; border: 3px solid var(--border); border-top-color: var(--accent-fill); border-radius: 50%; margin: 0 auto 16px; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .ai-loading p { font-size: 15px; color: var(--text-secondary); margin: 0; }
+  .ai-loading p.sub { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+  .comp-pills { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .comp-pill { font-size: 14px; font-weight: 500; padding: 6px 15px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; cursor: pointer; }
+  .comp-pill.active { background: var(--accent-bg); color: var(--accent-text); border-color: var(--accent-bg); }
+  .league-pills { display: flex; gap: 6px; margin-bottom: 24px; flex-wrap: wrap; }
+  .league-pills .comp-pill { font-size: 12.5px; padding: 5px 12px; }
+  .game-list-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 19px; margin-bottom: 14px; cursor: pointer; transition: border-color .15s; }
+  .game-list-card:hover { border-color: var(--accent-fill); }
+  .glc-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 18px; font-weight: 600; }
+  .glc-time { font-size: 15px; color: var(--text-muted); font-weight: 400; }
+  .glc-sub { font-size: 14px; color: var(--text-secondary); margin-top: 6px; }
+  .glc-analysis { font-size: 15px; color: var(--accent-text); margin-top: 12px; display: flex; align-items: center; gap: 3px; }
+  .back-link { display: flex; align-items: center; gap: 6px; font-size: 15px; color: var(--text-secondary); cursor: pointer; margin-bottom: 18px; }
+  .back-link:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="wordmark">Sportscheck</div>
+    <nav>
+      <div class="sport-item active" onclick="selectSport(this,'soccer')">Soccer</div>
+      <div class="sport-item" onclick="selectSport(this,'nhl')">NHL</div>
+      <div class="sport-item" onclick="selectSport(this,'nba')">NBA</div>
+      <div class="sport-item" onclick="selectSport(this,'mlb')">MLB</div>
+      <div class="sport-item" onclick="selectSport(this,'esports')">Esports</div>
+    </nav>
+    <button id="fetch-btn" onclick="runFetch()" style="margin:20px 29px 0;width:calc(100% - 58px);background:var(--accent-fill);color:#fff;border:none;border-radius:8px;padding:11px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Fetch now</button>
+    <p id="fetch-status" style="margin:8px 29px 0;font-size:12px;color:var(--text-muted);line-height:1.4;">Premier League standings only, for now.</p>
+  </aside>
+
+  <main class="main">
+    <div id="soccer-list">
+      <div class="list-header">
+        <div>
+          <p class="list-title">Soccer</p>
+          <div class="date-nav">
+            <svg viewBox="0 0 24 24" width="1em" height="1em" class="date-arrow" id="date-prev" onclick="changeDate(-1)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            <p class="list-date" id="list-date-text">Monday, 31 August 2026</p>
+            <svg viewBox="0 0 24 24" width="1em" height="1em" class="date-arrow" id="date-next" onclick="changeDate(1)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </div>
+        </div>
+        <svg viewBox="0 0 24 24" style="width:22px;height:22px;color:var(--text-secondary);cursor:pointer;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
+      </div>
+      <div class="comp-pills" id="country-pills"></div>
+      <div class="league-pills" id="league-pills"></div>
+      <div class="no-games hidden" id="no-games-placeholder">No games loaded for this date yet — once the scraper is connected, this date's schedule would load automatically.</div>
+      <div class="no-games hidden" id="other-league-placeholder">Not loaded yet.</div>
+    </div>
+
+    <div id="soccer-detail" class="hidden">
+      <div class="back-link" onclick="showList()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;vertical-align:-2px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>All games</div>
+      <div class="breadcrumb" id="match-breadcrumb">Premier League</div>
+      <div class="teams-row">
+        <div class="crest" id="match-home-crest" style="background: var(--surface-raised); border: 1px solid var(--border);">—</div>
+        <div class="vs-title" id="match-title">Loading current match…</div>
+        <div class="crest" id="match-away-crest" style="background: var(--accent-bg); color: var(--accent-text);">—</div>
+      </div>
+      <div class="kickoff-meta" id="match-meta">Checking for the current Premier League match…</div>
+
+      <div class="tabs-row">
+        <button class="tab-btn active" onclick="selectTab(this,'lineup')">Lineup</button>
+        <button class="tab-btn" onclick="selectTab(this,'season')">Season stats</button>
+        <button class="tab-btn" onclick="selectTab(this,'alltime')">General stats</button>
+        <button class="tab-btn" onclick="selectTab(this,'opponent')">Opponent stats</button>
+        <button class="tab-btn" onclick="selectTab(this,'standings')">Standings</button>
+        <button class="tab-btn" onclick="selectTab(this,'playerstats')">Player stats</button>
+        <button class="tab-btn" onclick="selectTab(this,'injuries')">Injuries</button>
+        <button class="tab-btn" onclick="selectTab(this,'form')">Recent games/H2H</button>
+        <button class="tab-btn" onclick="selectTab(this,'picks')">Picks</button>
+        <button class="tab-btn" onclick="selectTab(this,'ai')">AI</button>
+        <button class="tab-btn" onclick="selectTab(this,'news')">News</button>
+      </div>
+
+      <!-- SEASON STATS -->
+      <div class="panel" id="panel-season">
+        <div class="card" id="match-stats-card">
+          <h3>This match — live stats</h3>
+          <p class="body-text">Not connected yet.</p>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Season so far</h3>
+            <table class="data">
+              <tr><th></th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>Pts</th></tr>
+              <tr><td colspan="8" style="color:var(--text-muted);">Not connected yet</td></tr>
+            </table>
+          </div>
+          <div class="card">
+            <h3>Per-game averages</h3>
+            <div id="season-rows"></div>
+          </div>
+        </div>
+        <p class="disclaimer">Not connected yet — same full stat set as General and Opponent stats, but scoped to the current season only once the scraper is wired in (the card above is this one match specifically; the per-game averages below are the season, not just this match).</p>
+      </div>
+
+      <!-- ALL-TIME STATS -->
+      <div class="panel" id="panel-alltime">
+        <div class="grid-2">
+          <div class="card">
+            <h3>Totals (last 2 years)</h3>
+            <table class="data" id="alltime-totals-table">
+              <tr><th></th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>Pts</th></tr>
+              <tr><td colspan="8" style="color:var(--text-muted);">Not connected yet</td></tr>
+            </table>
+          </div>
+          <div class="card">
+            <h3>Per-game averages (last 2 years)</h3>
+            <div id="alltime-rows"></div>
+          </div>
+        </div>
+        <p class="disclaimer" id="alltime-note">Not loaded yet — real data fetches the first time you open this tab.</p>
+      </div>
+
+      <!-- OPPONENT STATS -->
+      <div class="panel" id="panel-opponent">
+        <div class="card">
+          <h3>Per-meeting averages (last 2 years)</h3>
+          <div id="opponent-rows"></div>
+        </div>
+        <div class="card">
+          <h3>Head-to-head record (last 2 years)</h3>
+          <div id="opponent-h2h-bar"><p class="body-text">Not loaded yet.</p></div>
+          <p class="disclaimer" id="opponent-note">Real data fetches the first time you open this tab, not on every page load — keeps this to one heavier check instead of running on every visit.</p>
+        </div>
+        <div class="card">
+          <h3>Recent meetings</h3>
+          <div id="opponent-meetings"><p class="body-text">Not loaded yet.</p></div>
+        </div>
+      </div>
+
+      <!-- INJURIES -->
+      <div class="panel" id="panel-injuries">
+        <div class="grid-2">
+          <div class="card">
+            <h3>Home team — out or doubtful</h3>
+            <div id="injuries-home">
+              <p class="body-text">Not connected yet.</p>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Away team — out or doubtful</h3>
+            <div id="injuries-away">
+              <p class="body-text">Not connected yet.</p>
+            </div>
+          </div>
+        </div>
+        <p class="disclaimer" id="injuries-source-note">Not connected yet — no working injuries source found for this league so far.</p>
+      </div>
+
+      <!-- STANDINGS -->
+      <div class="panel" id="panel-standings">
+        <div class="subtabs">
+          <button class="subtab-btn active" onclick="selectSubtab(this,'standings-table')">Standings</button>
+          <button class="subtab-btn" onclick="selectSubtab(this,'standings-scorers')">Top scorers</button>
+        </div>
+        <div class="subpanel active" id="sub-standings-table">
+          <select class="season-select" id="standings-year-select" onchange="selectYear('standings', this.value)"></select>
+          <div class="card">
+            <h3 id="standings-title">Premier League — before tonight's match</h3>
+            <table class="data" id="standings-table-el"></table>
+          </div>
+        </div>
+        <div class="subpanel" id="sub-standings-scorers">
+          <select class="season-select" id="scorers-year-select" onchange="selectYear('scorers', this.value)"></select>
+          <div class="card">
+            <h3 id="scorers-title">Premier League — top scorers</h3>
+            <table class="data" id="scorers-table-el"></table>
+            <p class="disclaimer">Not connected to a real stats source yet — shown with placeholder rows so the layout is ready to populate.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- PLAYER STATS -->
+      <div class="panel" id="panel-playerstats">
+        <div class="card">
+          <h3>Player stats</h3>
+          <p class="body-text">Not built yet — layout placeholder for individual player statistics (goals, assists, minutes, cards, ratings) once a squad-level data source is connected.</p>
+        </div>
+      </div>
+
+      <!-- LINEUP -->
+      <div class="panel active" id="panel-lineup">
+        <div class="subtabs">
+          <button class="subtab-btn active" onclick="selectSubtab(this,'lineup-confirmed')">Confirmed</button>
+          <button class="subtab-btn" onclick="selectSubtab(this,'lineup-projected')">Projected</button>
+        </div>
+        <div class="subpanel active" id="sub-lineup-confirmed">
+          <div class="card" id="lineup-confirmed-card">
+            <h3>Confirmed lineups</h3>
+            <p class="body-text">Checking for real lineup data…</p>
+          </div>
+        </div>
+        <div class="subpanel" id="sub-lineup-projected">
+          <div class="card">
+            <h3>Projected lineups</h3>
+            <p class="body-text">Not a data source this app has — Flashscore's lineup feed only provides the confirmed lineup once clubs release it, not an earlier speculative version. Check the Confirmed tab once it's closer to kickoff.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- RECENT GAMES / H2H -->
+      <div class="panel" id="panel-form">
+        <div class="grid-2">
+          <div class="card">
+            <h3>Home team — recent games</h3>
+            <div id="form-home"><p class="body-text">Not connected yet.</p></div>
+          </div>
+          <div class="card">
+            <h3>Away team — recent games</h3>
+            <div id="form-away"><p class="body-text">Not connected yet.</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Head-to-head snapshot</h3>
+          <div id="form-h2h"><p class="body-text">Not connected yet.</p></div>
+          <p class="disclaimer">Last 2 years, once connected — full breakdown on the Opponent stats tab.</p>
+        </div>
+      </div>
+
+      <!-- PICKS -->
+      <div class="panel" id="panel-picks">
+        <div class="pick-grid">
+          <div class="pick-box"><div class="pick-pct">—</div><div class="pick-label">Home win</div></div>
+          <div class="pick-box"><div class="pick-pct">—</div><div class="pick-label">Draw</div></div>
+          <div class="pick-box"><div class="pick-pct">—</div><div class="pick-label">Away win</div></div>
+        </div>
+        <div class="card">
+          <h3>How this will be built</h3>
+          <p class="body-text">Not connected yet — becomes a real calculation once match data and history are wired in.</p>
+        </div>
+      </div>
+
+      <!-- AI -->
+      <div class="panel" id="panel-ai">
+        <div class="ai-prompt" id="ai-prompt">
+          <p>Get an AI-written breakdown of this match — conclusion, reasoning, and a primary and secondary pick with percentages — pulling only from the stats, injuries, news and history already loaded above (max 5-6 sources).</p>
+          <button class="load-btn" onclick="loadAIResponse()">Load AI response</button>
+        </div>
+        <div class="ai-loading hidden" id="ai-loading">
+          <div class="spinner"></div>
+          <p>Analysing up to 5-6 sources…</p>
+          <p class="sub">Usually 10-30 seconds for a lookup like this.</p>
+        </div>
+        <div class="hidden" id="ai-results">
+        <div class="card">
+          <h3>Conclusion</h3>
+          <p class="body-text">Not connected yet — this is a layout placeholder, not a real generated response.</p>
+        </div>
+        <div class="card">
+          <h3>Reasoning</h3>
+          <p class="body-text">Not connected yet.</p>
+          <p class="disclaimer">Layout only, not a real generated response — becomes real once this calls the Claude API on the backend with real data from every other tab.</p>
+        </div>
+        <div class="grid-2">
+          <div class="card" style="border-color:var(--accent-fill);">
+            <h3>Primary pick</h3>
+            <div style="font-size:20px;font-weight:600;margin-bottom:6px;">—</div>
+            <div class="pick-pct" style="font-size:32px;">—</div>
+          </div>
+          <div class="card">
+            <h3>Secondary pick</h3>
+            <div style="font-size:20px;font-weight:600;margin-bottom:6px;">—</div>
+            <div class="pick-pct" style="font-size:32px;">—</div>
+          </div>
+        </div>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-news">
+        <div class="ai-prompt" id="news-prompt">
+          <p>Search a handful of top sources for recent news, injuries and transfer rumours about this match, then write a summary — plus the real links it found, so you can read the originals yourself instead of only trusting the summary.</p>
+          <button class="load-btn" onclick="loadNewsResponse()">Research</button>
+        </div>
+        <div class="ai-loading hidden" id="news-loading">
+          <div class="spinner"></div>
+          <p>Researching news and rumours…</p>
+          <p class="sub">Checking a handful of top sources, usually 20-40 seconds.</p>
+        </div>
+        <div class="hidden" id="news-results">
+          <div class="card">
+            <h3>Summary</h3>
+            <p class="body-text" id="news-summary-text"></p>
+          </div>
+          <div class="card">
+            <h3>Sources</h3>
+            <div id="news-sources-list"></div>
+          </div>
+          <p class="disclaimer">This calls the real Claude API with live web search, capped at 5-6 searches — unlike the AI tab's example, this one genuinely works once your Anthropic key is set.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="other-content" class="hidden placeholder">Layout for <span id="other-sport-name">this sport</span> is next — soccer's structure and full stat set are getting built first, then this gets the same treatment.</div>
+  </main>
+</div>
+
+<script>
+  var generalStatsLoaded = false;
+  var opponentStatsLoaded = false;
+  function selectTab(btn, name) {
+    document.querySelectorAll('.tabs-row .tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('#soccer-detail > .panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
+    if (name === 'alltime' && !generalStatsLoaded) {
+      generalStatsLoaded = true;
+      loadGeneralStats();
+    }
+    if (name === 'opponent' && !opponentStatsLoaded) {
+      opponentStatsLoaded = true;
+      loadOpponentStats();
+    }
+  }
+  function selectSubtab(btn, id) {
+    const panel = btn.closest('.panel');
+    panel.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    panel.querySelectorAll('.subpanel').forEach(p => p.classList.toggle('active', p.id === 'sub-' + id));
+  }
+  function selectSport(el, name) {
+    document.querySelectorAll('.sport-item').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+    var isSoccer = name === 'soccer';
+    document.getElementById('soccer-list').classList.toggle('hidden', !isSoccer);
+    document.getElementById('soccer-detail').classList.add('hidden');
+    document.getElementById('other-content').classList.toggle('hidden', isSoccer);
+    if (!isSoccer) {
+      var labels = { nhl: 'NHL', nba: 'NBA', mlb: 'MLB', esports: 'Esports' };
+      document.getElementById('other-sport-name').textContent = labels[name] || name;
+    }
+  }
+
+  function showDetail() {
+    document.getElementById('soccer-list').classList.add('hidden');
+    document.getElementById('soccer-detail').classList.remove('hidden');
+    window.scrollTo(0, 0);
+  }
+  function showList() {
+    document.getElementById('soccer-detail').classList.add('hidden');
+    document.getElementById('soccer-list').classList.remove('hidden');
+    window.scrollTo(0, 0);
+  }
+
+  var baseDate = new Date(2026, 7, 31);
+  var dateOffset = 0;
+  var dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  function formatListDate(d) {
+    return dayNames[d.getDay()] + ', ' + d.getDate() + ' ' + monthNames[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  function changeDate(delta) {
+    var next = dateOffset + delta;
+    if (next < -14 || next > 14) return;
+    dateOffset = next;
+    var d = new Date(baseDate.getTime());
+    d.setDate(d.getDate() + dateOffset);
+    document.getElementById('list-date-text').textContent = formatListDate(d);
+    document.getElementById('date-prev').classList.toggle('disabled', dateOffset <= -14);
+    document.getElementById('date-next').classList.toggle('disabled', dateOffset >= 14);
+    updateListContent();
+  }
+
+  var soccerCountries = [
+    { name: "England", comps: ["Championship", "EFL Cup", "FA Cup", "League One", "Premier League"] },
+    { name: "Italy", comps: ["Coppa Italia", "Serie A"] },
+    { name: "France", comps: ["Coupe de France", "Ligue 1"] },
+    { name: "Spain", comps: ["Copa del Rey", "La Liga"] },
+    { name: "Europe", comps: ["Champions League", "Conference League", "Europa League"] },
+    { name: "Germany", comps: ["Bundesliga", "DFB-Pokal"] },
+    { name: "Albania", comps: ["Albanian Cup", "Kategoria Superiore"] },
+    { name: "Argentina", comps: ["Copa Argentina", "Liga Profesional"] },
+    { name: "Austria", comps: ["Bundesliga", "ÖFB-Cup"] },
+    { name: "Belgium", comps: ["Belgian Cup", "Pro League"] },
+    { name: "Brazil", comps: ["Brasileirão", "Copa do Brasil"] },
+    { name: "Croatia", comps: ["Croatian Cup", "HNL"] },
+    { name: "Cyprus", comps: ["Cypriot Cup", "First Division"] },
+    { name: "Denmark", comps: ["Danish Cup", "Superliga"] },
+    { name: "Israel", comps: ["Ligat ha'Al", "State Cup"] },
+    { name: "Mexico", comps: ["Liga MX", "Mexican Cup"] },
+    { name: "Netherlands", comps: ["Eredivisie", "KNVB Cup"] },
+    { name: "Norway", comps: ["Eliteserien", "Norwegian Cup"] },
+    { name: "Portugal", comps: ["Primeira Liga", "Taça de Portugal"] },
+    { name: "Saudi Arabia", comps: ["King's Cup", "Saudi Pro League"] },
+    { name: "Serbia", comps: ["Serbian Cup", "SuperLiga"] },
+    { name: "Sweden", comps: ["Allsvenskan", "Superettan", "Svenska Cupen"] },
+    { name: "Turkey", comps: ["Süper Lig", "Turkish Cup"] },
+    { name: "USA", comps: ["MLS", "US Open Cup"] }
+  ];
+  // England defaults to Premier League specifically (the one with real data)
+  // even though it now sits alphabetically last in England's own list.
+  var preferredDefaultComp = { "England": "Premier League" };
+  var activeCountryIdx = 0;
+  var activeCompName = preferredDefaultComp[soccerCountries[0].name] || soccerCountries[0].comps[0];
+
+  function renderCountryPills() {
+    var row = document.getElementById('country-pills');
+    row.innerHTML = '';
+    soccerCountries.forEach(function(c, i) {
+      var pill = document.createElement('div');
+      pill.className = 'comp-pill' + (i === activeCountryIdx ? ' active' : '');
+      pill.textContent = c.name;
+      pill.onclick = function() { selectCountry(i); };
+      row.appendChild(pill);
+    });
+  }
+
+  function renderLeaguePills() {
+    var row = document.getElementById('league-pills');
+    row.innerHTML = '';
+    soccerCountries[activeCountryIdx].comps.forEach(function(name) {
+      var pill = document.createElement('div');
+      pill.className = 'comp-pill' + (name === activeCompName ? ' active' : '');
+      pill.textContent = name;
+      pill.onclick = function() { selectComp(name); };
+      row.appendChild(pill);
+    });
+  }
+
+  function selectCountry(i) {
+    activeCountryIdx = i;
+    var country = soccerCountries[i];
+    activeCompName = preferredDefaultComp[country.name] || country.comps[0];
+    renderCountryPills();
+    renderLeaguePills();
+    updateListContent();
+  }
+
+  function selectComp(name) {
+    activeCompName = name;
+    renderLeaguePills();
+    updateListContent();
+  }
+
+  function updateListContent() {
+    var isPL = soccerCountries[activeCountryIdx].name === 'England' && activeCompName === 'Premier League';
+    var otherPlaceholder = document.getElementById('other-league-placeholder');
+    var noGames = document.getElementById('no-games-placeholder');
+
+    if (!isPL) {
+      noGames.classList.add('hidden');
+      otherPlaceholder.classList.remove('hidden');
+      otherPlaceholder.textContent = 'No games loaded for ' + activeCompName + ' yet — layout is ready, data is not connected.';
+      return;
+    }
+    otherPlaceholder.classList.add('hidden');
+    noGames.classList.remove('hidden');
+  }
+
+  renderCountryPills();
+  renderLeaguePills();
+
+  function loadAIResponse() {
+    document.getElementById('ai-prompt').classList.add('hidden');
+    document.getElementById('ai-loading').classList.remove('hidden');
+    setTimeout(function() {
+      document.getElementById('ai-loading').classList.add('hidden');
+      document.getElementById('ai-results').classList.remove('hidden');
+    }, 2800);
+  }
+
+  function barPercents(a, b) {
+    var total = a + b;
+    if (!total || total <= 0) return [50, 50];
+    var pa = Math.round((a / total) * 100);
+    return [pa, 100 - pa];
+  }
+
+  function formatStatValue(s) {
+    if (s.value == null) return '—';
+    return s.value.toFixed(s.decimals) + (s.suffix || '');
+  }
+
+  function buildFullStatRows(homeStats, awayStats) {
+    return homeStats.map(function(hs, i) {
+      var as = awayStats[i];
+      var hv = hs.value, av = as.value;
+      var perc = (hv != null && av != null) ? barPercents(hv, av) : [50, 50];
+      return [formatStatValue(hs), hs.label, formatStatValue(as), perc[0], perc[1]];
+    });
+  }
+
+  // The real, complete list of stats Flashscore's match-stats feed provides
+  // (confirmed against the scraper's own captured sample data, not guessed).
+  // Shown as empty placeholders for now — same labels the scraper will
+  // populate once it's wired in, nothing invented or approximated.
+  // SCOPE NOTE for when this gets wired to real data — all three stats tabs
+  // use the same 34-category list below, but each is scoped differently:
+  //   Season stats   -> only the CURRENT season's games
+  //   General stats  -> ALL games (multi-year), which naturally includes
+  //                     the current season's games within that wider set
+  //   Opponent stats -> ONLY head-to-head games between these two specific
+  //                     teams, regardless of season
+  // Same labels, same layout, three different underlying queries.
+  var FULL_STAT_LABELS = [
+    'xG per game', 'xA per game', 'Possession', 'Shots per game', 'Shots on target / game',
+    'Shots off target / game', 'Blocked shots / game', 'Shots inside box / game', 'Shots outside box / game',
+    'Hit woodwork / game', 'Big chances / game', 'Corners per game', 'Touches in box / game',
+    'Through passes / game', 'Offsides per game', 'Free kicks / game', 'Pass accuracy',
+    'Long pass accuracy', 'Final-third pass accuracy', 'Cross accuracy', 'Throw ins / game',
+    'Fouls per game', 'Tackle success', 'Duels won / game', 'Clearances per game', 'Interceptions per game',
+    'Errors leading to shot / game', 'Errors leading to goal / game', 'Saves per game',
+    'xG on target faced / game', 'Goals prevented / game', 'Goal kicks / game', 'Yellow cards / game', 'Red cards / game'
+  ];
+
+  function emptyStatRows(labels) {
+    return labels.map(function(label) { return ['—', label, '—', 50, 50]; });
+  }
+
+  function loadGeneralStats() {
+    document.getElementById('alltime-totals-table').innerHTML =
+      '<tr><th></th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>Pts</th></tr>' +
+      '<tr><td colspan="8" style="color:var(--text-muted);">Not connected yet</td></tr>';
+    var summaryLabels = ['Goals for / game', 'Goals against / game', 'Points per game', 'Win rate'];
+    document.getElementById('alltime-rows').innerHTML = statRowsHTML(emptyStatRows(summaryLabels.concat(FULL_STAT_LABELS)));
+    document.getElementById('alltime-note').textContent = 'Not connected yet — all ' + (summaryLabels.length + FULL_STAT_LABELS.length) + ' stat categories are laid out, scoped to all games (including the current season) once the scraper is wired in.';
+  }
+
+  function loadOpponentStats() {
+    document.getElementById('opponent-h2h-bar').innerHTML = '<p class="body-text">Not connected yet.</p>';
+    document.getElementById('opponent-meetings').innerHTML = '<p class="body-text">Not connected yet.</p>';
+    var meetingLabel = ['Goals for / meeting'];
+    document.getElementById('opponent-rows').innerHTML = statRowsHTML(emptyStatRows(meetingLabel.concat(FULL_STAT_LABELS)));
+    document.getElementById('opponent-note').textContent = 'Not connected yet — same full stat set as General stats, scoped to head-to-head meetings once the scraper is wired in.';
+  }
+
+  function statRowsHTML(rows) {
+    return rows.map(function(r) {
+      var lv = r[0], label = r[1], rv = r[2], lp = r[3], rp = r[4];
+      return '<div class="stat-row"><div class="labels"><span>' + lv + '</span><span>' + label + '</span><span>' + rv + '</span></div><div class="bar"><div class="a" style="width:' + lp + '%"></div><div class="b" style="width:' + rp + '%"></div></div></div>';
+    }).join('');
+  }
+
+  document.getElementById('season-rows').innerHTML = statRowsHTML(emptyStatRows(FULL_STAT_LABELS));
+  // alltime-rows and opponent-rows are populated by loadGeneralStats() and
+  // loadOpponentStats() now, lazily on first tab click — not eagerly here.
+
+
+  function buildYearList() {
+    var years = [];
+    var startYear = 2026;
+    for (var i = 0; i < 16; i++) {
+      var y1 = startYear - i;
+      var y2 = (y1 + 1).toString().slice(-2);
+      years.push(y1 + '-' + y2);
+    }
+    return years;
+  }
+  var allYears = buildYearList();
+
+  ['standings', 'scorers'].forEach(function(kind) {
+    var sel = document.getElementById(kind + '-year-select');
+    allYears.forEach(function(y) {
+      var opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      sel.appendChild(opt);
+    });
+  });
+
+  function apiSeasonFromLabel(yearLabel) {
+    return yearLabel.split('-')[0]; // "2026-27" -> "2026", matching API-Sports' season format
+  }
+
+  async function selectYear(kind, year) {
+    if (kind === 'standings') {
+      var tbl = document.getElementById('standings-table-el');
+      var title = document.getElementById('standings-title');
+      title.textContent = 'Premier League — ' + year;
+      tbl.innerHTML = '<tr><td style="padding:20px 4px;color:var(--text-muted);">Loading…</td></tr>';
+      try {
+        var res = await fetch('/api/standings?league=' + encodeURIComponent('Premier League') + '&season=' + apiSeasonFromLabel(year));
+        var data = await res.json();
+        if (!data.loaded || !data.standings || data.standings.length === 0) {
+          tbl.innerHTML = '<tr><td style="padding:20px 4px;color:var(--text-muted);">Not connected yet — click "Fetch now" in the sidebar.</td></tr>';
+          return;
+        }
+        title.textContent = 'Premier League — updated ' + new Date(data.updatedAt).toLocaleString();
+        var html = '<tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th></tr>';
+        data.standings.forEach(function(r) {
+          var gd = r.goalsFor - r.goalsAgainst;
+          html += '<tr><td class="num">' + r.position + '</td><td>' + r.team + '</td><td class="num">' + r.played + '</td><td class="num">' + r.won + '</td><td class="num">' + r.drawn + '</td><td class="num">' + r.lost + '</td><td class="num">' + r.goalsFor + '</td><td class="num">' + r.goalsAgainst + '</td><td class="num">' + (gd > 0 ? '+' + gd : gd) + '</td><td class="num"><strong>' + r.points + '</strong></td></tr>';
+        });
+        tbl.innerHTML = html;
+      } catch (err) {
+        tbl.innerHTML = '<tr><td style="padding:20px 4px;color:var(--text-muted);">Could not reach the backend — ' + err.message + '</td></tr>';
+      }
+    } else {
+      var stbl = document.getElementById('scorers-table-el');
+      var stitle = document.getElementById('scorers-title');
+      stitle.textContent = 'Premier League — top scorers, ' + year;
+      stbl.innerHTML = '<tr><th>#</th><th>Player</th><th>Team</th><th>Pts</th><th>Goals</th><th>Assists</th></tr><tr><td colspan="6" style="color:var(--text-muted);">Not connected yet — top scorers isn\'t built in the scraper pipeline yet.</td></tr>';
+    }
+  }
+  document.getElementById('standings-year-select').value = '2026-27';
+  document.getElementById('scorers-year-select').value = '2026-27';
+  selectYear('standings', '2026-27');
+  selectYear('scorers', '2026-27');
+
+  // The one real pipeline right now: spawn the scraper, fetch Premier
+  // League standings, store them, re-render if Standings is on screen.
+  async function runFetch() {
+    var btn = document.getElementById('fetch-btn');
+    var status = document.getElementById('fetch-status');
+    btn.disabled = true;
+    btn.textContent = 'Fetching…';
+    status.textContent = 'Reaching out to Flashscore for Premier League standings…';
+    try {
+      var res = await fetch('/api/admin/fetch-standings', { method: 'POST' });
+      var data = await res.json();
+      if (data.success) {
+        status.textContent = 'Done — ' + data.stored + ' teams updated just now.';
+        selectYear('standings', document.getElementById('standings-year-select').value);
+      } else {
+        status.textContent = 'Failed — ' + (data.error || 'unknown error');
+      }
+    } catch (err) {
+      status.textContent = 'Could not reach the backend — ' + err.message;
+    }
+    btn.disabled = false;
+    btn.textContent = 'Fetch now';
+  }
+  runFetch(); // auto-fetch once on page load, so the button is a backup, not a requirement
+
+  var currentSoccerFixtureId = null;
+  var currentHomeTeam = null;
+  var currentAwayTeam = null;
+
+  function injuryRowsHTML(list) {
+    if (!list || list.length === 0) return '<p class="disclaimer" style="margin:0;">No injuries reported.</p>';
+    return list.map(function(i) {
+      var tagClass = /doubt/i.test(i.status) ? 'doubt' : 'out';
+      return '<div class="injury-row"><div><div class="injury-name">' + i.player + '</div><div class="injury-issue">' + i.issue + '</div></div><span class="status-tag ' + tagClass + '">' + i.status + '</span></div>';
+    }).join('');
+  }
+
+  function crestCode(teamName) {
+    return (teamName || '???').split(' ').map(function(w) { return w[0]; }).join('').slice(0, 3).toUpperCase();
+  }
+
+  function matchStatsHTML(stats) {
+    if (!stats || stats.length === 0) return '<p class="body-text">No stats available for this match yet.</p>';
+    var byPeriod = {};
+    stats.forEach(function(s) {
+      var p = s.period || 'Match';
+      if (!byPeriod[p]) byPeriod[p] = [];
+      byPeriod[p].push(s);
+    });
+    var order = ['Match', '1st Half', '2nd Half'];
+    var html = '';
+    order.filter(function(p) { return byPeriod[p]; }).forEach(function(p) {
+      html += '<p style="font-weight:600;margin:10px 0 4px;">' + p + '</p>';
+      byPeriod[p].forEach(function(s) {
+        html += '<div class="stat-row"><div class="labels"><span>' + s.home + '</span><span>' + s.stat + '</span><span>' + s.away + '</span></div></div>';
+      });
+    });
+    return html;
+  }
+
+  function lineupRowsHTML(players) {
+    if (!players || players.length === 0) return '<p class="disclaimer" style="margin:0;">No player list available.</p>';
+    return players.map(function(p) {
+      var num = p.number != null ? p.number + '. ' : '';
+      return '<div class="lineup-xi">' + num + (p.name || 'Unknown') + '</div>';
+    }).join('');
+  }
+
+  async function loadMatchData() {
+    // No scraper wired up yet in this pass — deliberately not fetching
+    // anything. Just showing honest empty states so the layout is fully
+    // visible without pretending there's real data behind it.
+    document.getElementById('injuries-source-note').textContent = 'Not connected yet — layout ready for when the scraper is wired in.';
+    document.getElementById('match-stats-card').innerHTML = '<h3>This match — live stats</h3><p class="body-text">Not connected yet.</p>';
+    document.getElementById('lineup-confirmed-card').innerHTML = '<h3>Confirmed lineups</h3><p class="body-text">Not connected yet.</p>';
+  }
+  loadMatchData();
+
+  function newsSourcesHTML(sources) {
+    if (!sources || sources.length === 0) {
+      return '<p class="disclaimer" style="margin:0;">No individual source links came back with this response — see the summary above.</p>';
+    }
+    return sources.map(function(s) {
+      return '<div class="meeting-row"><a href="' + s.url + '" target="_blank" rel="noopener noreferrer" style="color:var(--accent-text);text-decoration:none;">' + s.title + '</a></div>';
+    }).join('');
+  }
+
+  async function loadNewsResponse() {
+    if (!currentSoccerFixtureId) {
+      document.getElementById('news-prompt').classList.add('hidden');
+      document.getElementById('news-results').classList.remove('hidden');
+      document.getElementById('news-summary-text').textContent = 'No match loaded yet — this will work once the scraper is wired in and a real match is available.';
+      document.getElementById('news-sources-list').innerHTML = '';
+      return;
+    }
+    document.getElementById('news-prompt').classList.add('hidden');
+    document.getElementById('news-loading').classList.remove('hidden');
+    var url = '/api/news/' + currentSoccerFixtureId;
+    try {
+      var res = await fetch(url, { method: 'POST' });
+      var data = await res.json();
+      document.getElementById('news-loading').classList.add('hidden');
+      document.getElementById('news-results').classList.remove('hidden');
+      if (data.error) {
+        document.getElementById('news-summary-text').textContent = data.error;
+        document.getElementById('news-sources-list').innerHTML = '';
+      } else {
+        document.getElementById('news-summary-text').textContent = data.summary || 'No summary returned.';
+        document.getElementById('news-sources-list').innerHTML = newsSourcesHTML(data.sources);
+      }
+    } catch (err) {
+      document.getElementById('news-loading').classList.add('hidden');
+      document.getElementById('news-results').classList.remove('hidden');
+      document.getElementById('news-summary-text').textContent = 'Could not reach the backend — ' + err.message;
+      document.getElementById('news-sources-list').innerHTML = '';
+    }
+  }
+</script>
+</body>
+</html>

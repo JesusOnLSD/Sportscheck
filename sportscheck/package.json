@@ -1,0 +1,20 @@
+{
+  "name": "matchday-backend",
+  "version": "1.0.0",
+  "description": "Backend for the Matchday sports analysis app — fetches stats/standings/injuries from API-Sports, caches them in SQLite, and generates AI analysis and news summaries on demand via the Claude API.",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "node-cron": "^3.0.3"
+  }
+}
