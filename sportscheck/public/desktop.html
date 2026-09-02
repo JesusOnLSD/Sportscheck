@@ -105,7 +105,7 @@
 
   p.body-text { font-size: 18px; line-height: 1.8; color: var(--text-secondary); margin: 0 0 17px; }
   p.disclaimer { font-size: 15px; color: var(--text-muted); margin: 14px 0 0; }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
   .placeholder { text-align: center; padding: 120px 24px; color: var(--text-muted); font-size: 19px; }
 
   .list-header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 24px; }
@@ -813,16 +813,28 @@
     var status = document.getElementById('fetch-status');
     btn.disabled = true;
     btn.textContent = 'Fetching…';
-    status.textContent = 'Reaching out to Flashscore for Premier League standings…';
+    status.textContent = 'Reaching out to Flashscore for standings…';
     try {
-      var res = await fetch('/api/admin/fetch-standings', { method: 'POST' });
-      var data = await res.json();
-      if (data.success) {
-        status.textContent = 'Done — ' + data.stored + ' teams updated just now.';
-        selectYear('standings', document.getElementById('standings-year-select').value);
-      } else {
-        status.textContent = 'Failed — ' + (data.error || 'unknown error');
+      var standingsRes = await fetch('/api/admin/fetch-standings', { method: 'POST' });
+      var standingsData = await standingsRes.json();
+      if (!standingsData.success) {
+        status.textContent = 'Standings failed — ' + (standingsData.error || 'unknown error');
+        btn.disabled = false;
+        btn.textContent = 'Fetch now';
+        return;
       }
+
+      status.textContent = standingsData.stored + ' teams updated. Fetching fixtures…';
+      var fixturesRes = await fetch('/api/admin/fetch-fixtures', { method: 'POST' });
+      var fixturesData = await fixturesRes.json();
+
+      if (fixturesData.success) {
+        status.textContent = standingsData.stored + ' teams, ' + fixturesData.stored + ' fixtures updated just now.';
+      } else {
+        status.textContent = standingsData.stored + ' teams updated. Fixtures failed — ' + (fixturesData.error || 'unknown error');
+      }
+      selectYear('standings', document.getElementById('standings-year-select').value);
+      updateListContent(); // so newly-fetched fixtures show up without a manual reload
     } catch (err) {
       status.textContent = 'Could not reach the backend — ' + err.message;
     }

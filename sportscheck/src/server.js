@@ -72,23 +72,27 @@ app.get('/api/admin/python-check', async (req, res) => {
   }
 });
 
-// Simple cooldown shared across every scraper-triggering route. The
-// Python rate limiter (50/min) only protects calls *within* one script's
-// run — each spawn is a fresh process, so its in-memory timing resets
-// every time. This is the separate protection against rapid REPEATED
-// invocations — someone reloading the page a few times quickly, or
-// mashing "Fetch now" — which the Python-side limiter alone can't catch.
-let lastFetchTime = 0;
+// Cooldown, tracked separately PER ENDPOINT rather than one shared timer.
+// The Python rate limiter (50/min) only protects calls *within* one
+// script's run — each spawn is a fresh process, so its in-memory timing
+// resets every time. This is the separate protection against rapid
+// REPEATED invocations of the SAME endpoint — reloading the page a few
+// times quickly, or mashing "Fetch now". Per-endpoint (not one shared
+// clock) so a single deliberate action that legitimately calls two
+// different endpoints back to back — standings, then fixtures — isn't
+// incorrectly blocked on its second call.
+const lastFetchTimes = {};
 const FETCH_COOLDOWN_MS = 15000;
 
-function checkFetchCooldown(res) {
+function checkFetchCooldown(res, key) {
   const now = Date.now();
-  if (now - lastFetchTime < FETCH_COOLDOWN_MS) {
-    const waitSec = Math.ceil((FETCH_COOLDOWN_MS - (now - lastFetchTime)) / 1000);
-    res.status(429).json({ error: `Please wait ${waitSec}s before fetching again.` });
+  const last = lastFetchTimes[key] || 0;
+  if (now - last < FETCH_COOLDOWN_MS) {
+    const waitSec = Math.ceil((FETCH_COOLDOWN_MS - (now - last)) / 1000);
+    res.status(429).json({ error: `Please wait ${waitSec}s before fetching ${key} again.` });
     return false;
   }
-  lastFetchTime = now;
+  lastFetchTimes[key] = now;
   return true;
 }
 
@@ -96,7 +100,7 @@ function checkFetchCooldown(res) {
 // League standings, store them. Everything else (other leagues, other
 // sports, other data types) follows this exact same pattern later.
 app.post('/api/admin/fetch-standings', async (req, res) => {
-  if (!checkFetchCooldown(res)) return;
+  if (!checkFetchCooldown(res, 'standings')) return;
   const scriptPath = path.join(__dirname, '..', 'scraper', 'fetch_standings.py');
   const result = await runPythonScript(scriptPath);
 
@@ -132,7 +136,7 @@ app.post('/api/admin/fetch-standings', async (req, res) => {
 
 // Fetches a window of days (today ± 3) of Premier League fixtures.
 app.post('/api/admin/fetch-fixtures', async (req, res) => {
-  if (!checkFetchCooldown(res)) return;
+  if (!checkFetchCooldown(res, 'fixtures')) return;
   const scriptPath = path.join(__dirname, '..', 'scraper', 'fetch_fixtures.py');
   const result = await runPythonScript(scriptPath);
 
@@ -170,8 +174,8 @@ app.post('/api/admin/fetch-fixtures', async (req, res) => {
 // Summary tab, and is meant to be called both on demand (clicking into a
 // match) and repeatedly while that tab is open, to reflect a live score.
 app.post('/api/admin/fetch-match-detail/:fixtureId', async (req, res) => {
-  if (!checkFetchCooldown(res)) return;
   const { fixtureId } = req.params;
+  if (!checkFetchCooldown(res, 'match-detail:' + fixtureId)) return;
 
   const fixture = db.prepare('SELECT home_team AS homeTeam, away_team AS awayTeam FROM fixtures WHERE fixture_id = ?').get(fixtureId);
   if (!fixture) {

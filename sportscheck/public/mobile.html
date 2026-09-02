@@ -108,7 +108,7 @@
 
   p.body-text { font-size: 13px; line-height: 1.7; color: var(--text-secondary); margin: 0 0 12px; }
   p.disclaimer { font-size: 11.5px; color: var(--text-muted); margin: 10px 0 0; }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
   .placeholder { text-align: center; padding: 80px 20px; color: var(--text-muted); font-size: 14px; }
 
   .list-header { display: flex; align-items: flex-end; justify-content: space-between; padding: 4px 16px 14px; }
@@ -779,16 +779,26 @@
     var status = document.getElementById('fetch-status');
     btn.disabled = true;
     btn.textContent = 'Fetching…';
-    status.textContent = 'Reaching out to Flashscore…';
+    status.textContent = 'Reaching out to Flashscore for standings…';
     try {
-      var res = await fetch('/api/admin/fetch-standings', { method: 'POST' });
-      var data = await res.json();
-      if (data.success) {
-        status.textContent = 'Done — ' + data.stored + ' teams updated.';
-        selectYear('standings', document.getElementById('standings-year-select').value);
-      } else {
-        status.textContent = 'Failed — ' + (data.error || 'unknown error');
+      var standingsRes = await fetch('/api/admin/fetch-standings', { method: 'POST' });
+      var standingsData = await standingsRes.json();
+      if (!standingsData.success) {
+        status.textContent = 'Standings failed — ' + (standingsData.error || 'unknown error');
+        btn.disabled = false;
+        btn.textContent = 'Fetch now';
+        return;
       }
+      status.textContent = standingsData.stored + ' teams updated. Fetching fixtures…';
+      var fixturesRes = await fetch('/api/admin/fetch-fixtures', { method: 'POST' });
+      var fixturesData = await fixturesRes.json();
+      if (fixturesData.success) {
+        status.textContent = standingsData.stored + ' teams, ' + fixturesData.stored + ' fixtures updated.';
+      } else {
+        status.textContent = standingsData.stored + ' teams updated. Fixtures failed — ' + (fixturesData.error || 'unknown error');
+      }
+      selectYear('standings', document.getElementById('standings-year-select').value);
+      updateListContent();
     } catch (err) {
       status.textContent = 'Could not reach the backend.';
     }
