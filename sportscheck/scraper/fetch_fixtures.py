@@ -26,7 +26,13 @@ try:
     for offset in range(-3, 4):
         wait_for_rate_limit()
         day = get_fixtures("soccer", day_offset=offset)
-        pl = [m for m in day if m.tournament_name == "Premier League"]
+        # Several countries have a top-flight league also called "Premier
+        # League" in English (Ukraine, Wales, and others) — filtering by
+        # tournament_name alone would silently mix them in. country is
+        # checked too, matching the naming convention seen elsewhere in
+        # this scraper's real data ("England", "Angola", "Argentina" —
+        # full names, not codes).
+        pl = [m for m in day if m.tournament_name == "Premier League" and m.country == "England"]
         all_matches.extend(pl)
 
     result = {
