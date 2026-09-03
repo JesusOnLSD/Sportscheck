@@ -74,6 +74,14 @@ app.get('/api/admin/python-check', async (req, res) => {
   }
 });
 
+// Diagnostic only, no cooldown — shows the raw scorers feed response so a
+// "0 scorers" result can actually be diagnosed instead of guessed at.
+app.get('/api/admin/scorers-debug', async (req, res) => {
+  const scriptPath = path.join(__dirname, '..', 'scraper', 'debug_scorers.py');
+  const result = await runPythonScript(scriptPath);
+  res.json(result);
+});
+
 // Cooldown, tracked separately PER ENDPOINT rather than one shared timer.
 // The Python rate limiter (50/min) only protects calls *within* one
 // script's run — each spawn is a fresh process, so its in-memory timing
