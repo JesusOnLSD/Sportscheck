@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
-Diagnostic only — not part of the normal pipeline. Shows exactly what
-resolve_tournament_ids() and the scorers feed actually return right now,
-raw and untouched by the parser, so a "0 scorers" result can be diagnosed
-instead of guessed at.
+Diagnostic only — not part of the normal pipeline. Tests two candidate
+feed codes side by side (stageId-based and tournamentId-based) so a
+mismatch can be diagnosed directly rather than guessed at one at a time.
 """
 
 import sys
@@ -21,17 +20,29 @@ try:
     tournament_id, stage_id = resolve_tournament_ids("england", "premier-league", sport="football")
 
     wait_for_rate_limit()
-    resp = fetch_feed(f"df_tt_1_{stage_id}")
+    resp_stage = fetch_feed(f"df_tt_1_{stage_id}")
+
+    wait_for_rate_limit()
+    resp_tournament = fetch_feed(f"df_tt_1_{tournament_id}")
 
     result = {
         "success": True,
         "tournamentId": tournament_id,
         "stageId": stage_id,
-        "feedCode": f"df_tt_1_{stage_id}",
-        "rawResponseStatus": resp.status_code,
-        "rawResponseLength": len(resp.text),
-        "rawResponseFirst2000Chars": resp.text[:2000],
-        "containsUAMarker": "UA÷" in resp.text,
+        "stageIdAttempt": {
+            "feedCode": f"df_tt_1_{stage_id}",
+            "status": resp_stage.status_code,
+            "length": len(resp_stage.text),
+            "first500Chars": resp_stage.text[:500],
+            "containsUAMarker": "UA÷" in resp_stage.text,
+        },
+        "tournamentIdAttempt": {
+            "feedCode": f"df_tt_1_{tournament_id}",
+            "status": resp_tournament.status_code,
+            "length": len(resp_tournament.text),
+            "first500Chars": resp_tournament.text[:500],
+            "containsUAMarker": "UA÷" in resp_tournament.text,
+        },
     }
     print(json.dumps(result))
 
