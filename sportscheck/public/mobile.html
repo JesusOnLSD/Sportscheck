@@ -91,6 +91,27 @@
   .meeting-date { color: var(--text-muted); font-size: 10.5px; white-space: nowrap; flex-shrink: 0; }
   .meeting-comp { color: var(--text-muted); font-size: 10.5px; }
 
+  .tl-period-header { display: flex; justify-content: space-between; align-items: center; background: var(--surface-raised); border-radius: 8px; padding: 8px 12px; margin: 12px 0 6px; font-weight: 700; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-secondary); }
+  .tl-period-header:first-child { margin-top: 0; }
+  .tl-row { display: flex; align-items: center; padding: 8px 2px; gap: 8px; }
+  .tl-row-home { justify-content: flex-start; }
+  .tl-row-away { justify-content: flex-end; text-align: right; }
+  .tl-minute { font-weight: 700; font-size: 11px; color: var(--text-muted); min-width: 26px; flex-shrink: 0; }
+  .tl-row-home .tl-minute { text-align: left; }
+  .tl-row-away .tl-minute { text-align: right; }
+  .tl-text { font-size: 12px; }
+  .tl-text .out-player { color: var(--text-muted); }
+  .tl-text .in-player { color: var(--text); font-weight: 600; }
+  .tl-icon { flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .tl-icon-card { width: 13px; height: 17px; border-radius: 3px; }
+  .tl-icon-card.yellow { background: var(--draw-text); }
+  .tl-icon-card.red { background: var(--loss-text); }
+  .tl-icon-sub { display: flex; flex-direction: column; align-items: center; font-size: 9px; line-height: 1; }
+  .tl-icon-sub .in-arrow { color: var(--win-text); }
+  .tl-icon-sub .out-arrow { color: var(--loss-text); }
+  .tl-icon-goal { width: 18px; height: 18px; border-radius: 50%; background: var(--accent-fill); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+  .tl-score-badge { background: var(--surface-raised); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-weight: 700; font-size: 11px; }
+
   .season-select { width: 100%; padding: 8px 12px; font-size: 13px; font-weight: 600; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239AA7B5' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
 
   .lineup-xi { font-size: 12.5px; color: var(--text-secondary); line-height: 2; }
@@ -209,16 +230,16 @@
     <div class="panel" id="panel-season">
       <div class="card">
         <h3>Season so far</h3>
-        <table class="data">
+        <table class="data" id="season-totals-table">
           <tr><th></th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>Pts</th></tr>
-          <tr><td colspan="8" style="color:var(--text-muted);">Not connected yet</td></tr>
+          <tr><td colspan="8" style="color:var(--text-muted);">Not loaded yet</td></tr>
         </table>
       </div>
       <div class="card">
         <h3>Per-game averages</h3>
         <div id="season-rows"></div>
       </div>
-      <p class="disclaimer">Not connected yet — same full stat set as General and Opponent stats, scoped to the current season only once the scraper is wired in. This match's own live stats live on the Match Summary tab.</p>
+      <p class="disclaimer" id="season-note">Not loaded yet — real data fetches the first time you open this tab.</p>
     </div>
 
     <div class="panel" id="panel-alltime">
@@ -249,6 +270,10 @@
       <div class="card">
         <h3>Recent meetings</h3>
         <div id="opponent-meetings"><p class="body-text">Not loaded yet.</p></div>
+        <button id="h2h-load-more-btn" onclick="loadMoreH2H()" class="hidden" style="width:100%;margin-top:12px;background:var(--surface-raised);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;">
+          <span>More</span>
+          <svg viewBox="0 0 24 24" style="width:15px;height:15px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
       </div>
 
     </div>
@@ -425,6 +450,7 @@
 </div>
 
 <script>
+  var seasonStatsLoaded = false;
   var generalStatsLoaded = false;
   var opponentStatsLoaded = false;
   var summaryPollInterval = null;
@@ -434,6 +460,10 @@
     el.classList.add('active');
     document.querySelectorAll('#soccer-detail > .panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
     el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    if (name === 'season' && !seasonStatsLoaded) {
+      seasonStatsLoaded = true;
+      loadSeasonStats();
+    }
     if (name === 'alltime' && !generalStatsLoaded) {
       generalStatsLoaded = true;
       loadGeneralStats();
@@ -670,21 +700,117 @@
     return labels.map(function(label) { return ['—', label, '—', 50, 50]; });
   }
 
-  function loadGeneralStats() {
-    document.getElementById('alltime-totals-table').innerHTML =
+  function renderRecordTable(tableId, homeTeam, awayTeam, homeRecord, awayRecord) {
+    document.getElementById(tableId).innerHTML =
       '<tr><th></th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>Pts</th></tr>' +
-      '<tr><td colspan="8" style="color:var(--text-muted);">Not connected yet</td></tr>';
-    var summaryLabels = ['Goals for / game', 'Goals against / game', 'Points per game', 'Win rate'];
-    document.getElementById('alltime-rows').innerHTML = statRowsHTML(emptyStatRows(summaryLabels.concat(FULL_STAT_LABELS)));
-    document.getElementById('alltime-note').textContent = 'Not connected yet — all ' + (summaryLabels.length + FULL_STAT_LABELS.length) + ' stat categories are laid out, scoped to all games (including the current season) once the scraper is wired in.';
+      '<tr><td>' + homeTeam + '</td><td class="num">' + homeRecord.played + '</td><td class="num">' + homeRecord.won + '</td><td class="num">' + homeRecord.drawn + '</td><td class="num">' + homeRecord.lost + '</td><td class="num">' + homeRecord.goalsFor + '</td><td class="num">' + homeRecord.goalsAgainst + '</td><td class="num"><strong>' + homeRecord.points + '</strong></td></tr>' +
+      '<tr><td>' + awayTeam + '</td><td class="num">' + awayRecord.played + '</td><td class="num">' + awayRecord.won + '</td><td class="num">' + awayRecord.drawn + '</td><td class="num">' + awayRecord.lost + '</td><td class="num">' + awayRecord.goalsFor + '</td><td class="num">' + awayRecord.goalsAgainst + '</td><td class="num"><strong>' + awayRecord.points + '</strong></td></tr>';
   }
 
-  function loadOpponentStats() {
-    document.getElementById('opponent-h2h-bar').innerHTML = '<p class="body-text">Not connected yet.</p>';
-    document.getElementById('opponent-meetings').innerHTML = '<p class="body-text">Not connected yet.</p>';
-    var meetingLabel = ['Goals for / meeting'];
-    document.getElementById('opponent-rows').innerHTML = statRowsHTML(emptyStatRows(meetingLabel.concat(FULL_STAT_LABELS)));
-    document.getElementById('opponent-note').textContent = 'Not connected yet — same full stat set as General stats, scoped to head-to-head meetings once the scraper is wired in.';
+  function buildRealStatRows(homeStats, awayStats) {
+    return homeStats.map(function(hs, i) {
+      var as = awayStats[i];
+      var hv = hs.value, av = as.value;
+      var perc = (hv != null && av != null) ? barPercents(hv, av) : [50, 50];
+      var hDisplay = hv == null ? '—' : hv.toFixed(hs.decimals) + (hs.suffix || '');
+      var aDisplay = av == null ? '—' : av.toFixed(as.decimals) + (as.suffix || '');
+      return [hDisplay, hs.label, aDisplay, perc[0], perc[1]];
+    });
+  }
+
+  async function loadSeasonStats() {
+    var note = document.getElementById('season-note');
+    if (!currentHomeTeam || !currentAwayTeam) { note.textContent = 'No match loaded yet.'; return; }
+    note.textContent = 'Loading…';
+    try {
+      var home = await (await fetch('/api/season-stats?league=' + encodeURIComponent('Premier League') + '&team=' + encodeURIComponent(currentHomeTeam))).json();
+      var away = await (await fetch('/api/season-stats?league=' + encodeURIComponent('Premier League') + '&team=' + encodeURIComponent(currentAwayTeam))).json();
+      renderRecordTable('season-totals-table', currentHomeTeam, currentAwayTeam, home.record, away.record);
+      document.getElementById('season-rows').innerHTML = statRowsHTML(buildRealStatRows(home.stats, away.stats));
+      note.textContent = 'Current season — ' + home.matchesWithStats + '/' + home.matchesFound + ' + ' + away.matchesWithStats + '/' + away.matchesFound + ' matches have full stats.';
+    } catch (err) {
+      note.textContent = 'Could not reach the backend.';
+    }
+  }
+
+  async function loadGeneralStats() {
+    var note = document.getElementById('alltime-note');
+    if (!currentHomeTeam || !currentAwayTeam) { note.textContent = 'No match loaded yet.'; return; }
+    note.textContent = 'Loading…';
+    try {
+      var home = await (await fetch('/api/general-stats?league=' + encodeURIComponent('Premier League') + '&team=' + encodeURIComponent(currentHomeTeam))).json();
+      var away = await (await fetch('/api/general-stats?league=' + encodeURIComponent('Premier League') + '&team=' + encodeURIComponent(currentAwayTeam))).json();
+      renderRecordTable('alltime-totals-table', currentHomeTeam, currentAwayTeam, home.record, away.record);
+      document.getElementById('alltime-rows').innerHTML = statRowsHTML(buildRealStatRows(home.stats, away.stats));
+      note.textContent = 'Last 5 years including current season — ' + home.matchesWithStats + '/' + home.matchesFound + ' + ' + away.matchesWithStats + '/' + away.matchesFound + ' matches have full stats.';
+    } catch (err) {
+      note.textContent = 'Could not reach the backend.';
+    }
+  }
+
+  var h2hLimit = 5;
+
+  function meetingsListHTML(meetings) {
+    return meetings.map(function(m) {
+      var d = m.kickoffUtc ? new Date(m.kickoffUtc).toLocaleDateString() : '';
+      return '<div class="meeting-row"><span>' + m.homeTeam + ' ' + m.homeScore + '-' + m.awayScore + ' ' + m.awayTeam + '</span><span class="meeting-date">' + d + '</span></div>';
+    }).join('');
+  }
+
+  async function loadOpponentStats() {
+    var note = document.getElementById('opponent-note');
+    if (!currentHomeTeam || !currentAwayTeam) { note.textContent = 'No match loaded yet.'; return; }
+    note.textContent = 'Loading…';
+    h2hLimit = 5;
+    try {
+      var full = await (await fetch('/api/opponent-stats-full?league=' + encodeURIComponent('Premier League') + '&teamA=' + encodeURIComponent(currentHomeTeam) + '&teamB=' + encodeURIComponent(currentAwayTeam))).json();
+      document.getElementById('opponent-rows').innerHTML = statRowsHTML(buildRealStatRows(full.teamAStats, full.teamBStats));
+
+      var meetings = await (await fetch('/api/h2h-meetings?league=' + encodeURIComponent('Premier League') + '&teamA=' + encodeURIComponent(currentHomeTeam) + '&teamB=' + encodeURIComponent(currentAwayTeam) + '&limit=' + h2hLimit)).json();
+
+      if (meetings.total === 0) {
+        document.getElementById('opponent-h2h-bar').innerHTML = '<p class="body-text">No head-to-head meetings found.</p>';
+        document.getElementById('opponent-meetings').innerHTML = '<p class="body-text">No meetings found.</p>';
+        document.getElementById('h2h-load-more-btn').classList.add('hidden');
+        note.textContent = full.meetingsFound + ' meetings found for stats, 0 with scores stored.';
+        return;
+      }
+
+      var homeWins = 0, awayWins = 0, draws = 0;
+      meetings.meetings.forEach(function(m) {
+        var homeSideIsOurHome = m.homeTeam === currentHomeTeam;
+        var a = homeSideIsOurHome ? m.homeScore : m.awayScore;
+        var b = homeSideIsOurHome ? m.awayScore : m.homeScore;
+        if (a > b) homeWins++; else if (b > a) awayWins++; else draws++;
+      });
+      var wp = barPercents(homeWins, awayWins);
+      var drawPct = Math.max(0, 100 - wp[0] - wp[1]);
+      document.getElementById('opponent-h2h-bar').innerHTML =
+        '<div class="stat-row"><div class="labels"><span>' + currentHomeTeam + ' ' + homeWins + '</span><span>Draw ' + draws + '</span><span>' + currentAwayTeam + ' ' + awayWins + '</span></div>' +
+        '<div class="bar"><div class="a" style="width:' + wp[0] + '%"></div><div style="width:' + drawPct + '%;background:var(--draw-text);"></div><div class="b" style="width:' + wp[1] + '%"></div></div></div>';
+
+      document.getElementById('opponent-meetings').innerHTML = meetingsListHTML(meetings.meetings);
+      document.getElementById('h2h-load-more-btn').classList.toggle('hidden', meetings.meetings.length >= meetings.total);
+
+      note.textContent = full.meetingsFound + ' meetings, last 5 years. Showing ' + meetings.meetings.length + ' of ' + meetings.total + '.';
+    } catch (err) {
+      note.textContent = 'Could not reach the backend.';
+    }
+  }
+
+  async function loadMoreH2H() {
+    h2hLimit += 5;
+    var btn = document.getElementById('h2h-load-more-btn');
+    btn.disabled = true;
+    try {
+      var meetings = await (await fetch('/api/h2h-meetings?league=' + encodeURIComponent('Premier League') + '&teamA=' + encodeURIComponent(currentHomeTeam) + '&teamB=' + encodeURIComponent(currentAwayTeam) + '&limit=' + h2hLimit)).json();
+      document.getElementById('opponent-meetings').innerHTML = meetingsListHTML(meetings.meetings);
+      btn.classList.toggle('hidden', meetings.meetings.length >= meetings.total);
+      document.getElementById('opponent-note').textContent = meetings.total + ' meetings, last 5 years. Showing ' + meetings.meetings.length + ' of ' + meetings.total + '.';
+    } catch (err) {
+      document.getElementById('opponent-note').textContent = 'Could not load more.';
+    }
+    btn.disabled = false;
   }
 
   function statRowsHTML(rows) {
@@ -791,7 +917,7 @@
         btn.textContent = 'Fetch now';
         return;
       }
-      status.textContent = standingsData.stored + ' teams updated. Fetching fixtures…';
+      status.textContent = standingsData.stored + ' teams. Fetching fixtures…';
       var fixturesRes = await fetch('/api/admin/fetch-fixtures', { method: 'POST' });
       var fixturesData = await fixturesRes.json();
 
@@ -802,8 +928,30 @@
       var parts = [standingsData.stored + ' teams'];
       parts.push(fixturesData.success ? fixturesData.stored + ' fixtures' : 'fixtures failed');
       parts.push(scorersData.success ? scorersData.stored + ' scorers' : 'scorers failed');
-      status.textContent = parts.join(', ') + ' updated.';
 
+      var historyRes = await fetch('/api/admin/start-history-backfill', { method: 'POST' });
+      var historyData = await historyRes.json();
+      parts.push(historyData.started ? 'history started' : (historyData.error || historyData.reason || 'history skipped'));
+
+      if (currentSoccerFixtureId && currentHomeTeam && currentAwayTeam) {
+        status.textContent = parts.join(', ') + '. Fetching match detail…';
+        var detailRes = await fetch('/api/admin/fetch-match-detail/' + currentSoccerFixtureId, { method: 'POST' });
+        var detailData = await detailRes.json();
+        parts.push(detailData.success ? 'match detail updated' : 'match detail failed');
+
+        var homeBackfillRes = await fetch('/api/admin/start-team-stats-backfill/' + encodeURIComponent(currentHomeTeam), { method: 'POST' });
+        var homeBackfillData = await homeBackfillRes.json();
+        parts.push(homeBackfillData.started ? currentHomeTeam + ' backfill started' : (homeBackfillData.reason || currentHomeTeam + ' skipped'));
+
+        var awayBackfillRes = await fetch('/api/admin/start-team-stats-backfill/' + encodeURIComponent(currentAwayTeam), { method: 'POST' });
+        var awayBackfillData = await awayBackfillRes.json();
+        parts.push(awayBackfillData.started ? currentAwayTeam + ' backfill started' : (awayBackfillData.reason || currentAwayTeam + ' skipped'));
+
+        loadMatchData();
+        loadMatchSummary();
+      }
+
+      status.textContent = parts.join(', ') + '.';
       selectYear('standings', document.getElementById('standings-year-select').value);
       selectYear('scorers', document.getElementById('scorers-year-select').value);
       updateListContent();
@@ -841,6 +989,9 @@
 
   function openMatch(fixtureId) {
     currentSoccerFixtureId = fixtureId;
+    seasonStatsLoaded = false;
+    generalStatsLoaded = false;
+    opponentStatsLoaded = false;
     showDetail();
     loadMatchData();
     loadMatchSummary();
@@ -892,23 +1043,79 @@
     }
   }
 
+  function eventIcon(type) {
+    if (type === 'Goal' || type === 'Penalty' || type === 'Own Goal') return '<div class="tl-icon tl-icon-goal">⚽</div>';
+    if (type === 'Yellow Card') return '<div class="tl-icon"><div class="tl-icon-card yellow"></div></div>';
+    if (type === 'Red Card') return '<div class="tl-icon"><div class="tl-icon-card red"></div></div>';
+    if (type === 'Substitution - In' || type === 'Substitution - Out') return '<div class="tl-icon"><div class="tl-icon-sub"><span class="in-arrow">↑</span><span class="out-arrow">↓</span></div></div>';
+    return '';
+  }
+
+  function incidentTextHTML(inc) {
+    var events = inc.events || [];
+    var subOut = events.find(function(e) { return e.type === 'Substitution - Out'; });
+    var subIn = events.find(function(e) { return e.type === 'Substitution - In'; });
+    if (subOut && subIn) {
+      return '<span class="out-player">' + subOut.player + '</span> → <span class="in-player">' + subIn.player + '</span>';
+    }
+    var goal = events.find(function(e) { return e.type === 'Goal' || e.type === 'Penalty' || e.type === 'Own Goal'; });
+    if (goal) {
+      var assist = events.find(function(e) { return e.type === 'Assistance'; });
+      return '<strong>' + goal.player + '</strong>' + (assist ? ' <span class="out-player">(' + assist.player + ')</span>' : '');
+    }
+    var card = events.find(function(e) { return e.type === 'Yellow Card' || e.type === 'Red Card'; });
+    if (card) {
+      return '<strong>' + card.player + '</strong>' + (inc.reason ? ' <span class="out-player">(' + inc.reason + ')</span>' : '');
+    }
+    return events.map(function(e) { return e.player; }).join(', ');
+  }
+
+  function mainEventType(inc) {
+    var events = inc.events || [];
+    if (events.find(function(e) { return e.type === 'Goal' || e.type === 'Penalty' || e.type === 'Own Goal'; })) return 'Goal';
+    if (events.find(function(e) { return e.type === 'Yellow Card'; })) return 'Yellow Card';
+    if (events.find(function(e) { return e.type === 'Red Card'; })) return 'Red Card';
+    if (events.find(function(e) { return e.type === 'Substitution - In'; })) return 'Substitution - In';
+    return '';
+  }
+
+  function timelineRowHTML(inc, runningScore) {
+    var isHome = inc.team === 'home';
+    var minute = (inc.minute || '').replace("'", '') + "'";
+    var icon = eventIcon(mainEventType(inc));
+    var text = incidentTextHTML(inc);
+    var scoreBadge = mainEventType(inc) === 'Goal' ? '<span class="tl-score-badge">' + runningScore + '</span>' : '';
+
+    if (isHome) {
+      return '<div class="tl-row tl-row-home"><span class="tl-minute">' + minute + '</span>' + icon + '<span class="tl-text">' + text + '</span>' + scoreBadge + '</div>';
+    } else {
+      return '<div class="tl-row tl-row-away">' + scoreBadge + '<span class="tl-text">' + text + '</span>' + icon + '<span class="tl-minute">' + minute + '</span></div>';
+    }
+  }
+
   function timelineHTML(incidents) {
     if (!incidents || incidents.length === 0) return '<p class="body-text">No incidents recorded.</p>';
-    return incidents.map(function(inc) {
-      var minute = inc.minute || '';
-      var teamLabel = inc.team === 'home' ? currentHomeTeam : (inc.team === 'away' ? currentAwayTeam : '');
-      var eventsHtml = (inc.events || []).map(function(ev) {
-        var icon = '';
-        if (ev.type === 'Goal') icon = '⚽';
-        else if (ev.type === 'Yellow Card') icon = '🟨';
-        else if (ev.type === 'Red Card') icon = '🟥';
-        else if (ev.type === 'Substitution - In') icon = '↑';
-        else if (ev.type === 'Substitution - Out') icon = '↓';
-        else if (ev.type === 'Assistance') icon = '🅰️';
-        return '<div style="padding-left:12px;font-size:13px;">' + icon + ' ' + (ev.player || '') + ' <span style="color:var(--text-muted);font-size:11px;">(' + ev.type + ')</span></div>';
-      }).join('');
-      return '<div class="meeting-row" style="flex-direction:column;align-items:flex-start;gap:2px;padding:8px 0;"><strong>' + minute + ' — ' + teamLabel + '</strong>' + eventsHtml + '</div>';
-    }).join('');
+    var homeScore = 0, awayScore = 0;
+    var periods = {}, periodOrder = [];
+
+    incidents.forEach(function(inc) {
+      var period = inc.period || 'Match';
+      if (!periods[period]) { periods[period] = []; periodOrder.push(period); }
+      if (mainEventType(inc) === 'Goal') {
+        if (inc.team === 'home') homeScore++; else if (inc.team === 'away') awayScore++;
+      }
+      periods[period].push({ inc: inc, score: homeScore + ' - ' + awayScore });
+    });
+
+    var html = '';
+    periodOrder.forEach(function(period) {
+      var finalScore = periods[period][periods[period].length - 1].score;
+      html += '<div class="tl-period-header"><span>' + period + '</span><span>' + finalScore + '</span></div>';
+      periods[period].forEach(function(item) {
+        html += timelineRowHTML(item.inc, item.score);
+      });
+    });
+    return html;
   }
 
   async function loadMatchSummary() {
