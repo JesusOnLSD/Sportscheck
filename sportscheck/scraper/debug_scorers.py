@@ -25,6 +25,9 @@ try:
     wait_for_rate_limit()
     resp_tournament = fetch_feed(f"df_tt_1_{tournament_id}")
 
+    wait_for_rate_limit()
+    resp_combined = fetch_feed(f"tt_{tournament_id}_{stage_id}")
+
     result = {
         "success": True,
         "tournamentId": tournament_id,
@@ -42,6 +45,13 @@ try:
             "length": len(resp_tournament.text),
             "first500Chars": resp_tournament.text[:500],
             "containsUAMarker": "UA÷" in resp_tournament.text,
+        },
+        "combinedIdAttempt": {
+            "feedCode": f"tt_{tournament_id}_{stage_id}",
+            "status": resp_combined.status_code,
+            "length": len(resp_combined.text),
+            "first500Chars": resp_combined.text[:500],
+            "containsUAMarker": "UA÷" in resp_combined.text,
         },
     }
     print(json.dumps(result))
