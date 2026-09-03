@@ -531,7 +531,10 @@ app.get('/api/opponent-stats-full', (req, res) => {
   res.json({ league, teamA, teamB, meetingsFound: rows.length, teamAStats: statsA.stats, teamBStats: statsB.stats });
 });
 
-// Fetches a window of days (today ± 4 weeks) of Premier League fixtures.
+// Fetches a fast, safe window (today ± 1 week) of Premier League fixtures,
+// synchronously — the wider ±4 week view comes from start-history-backfill
+// instead, which runs in the background specifically because it doesn't
+// fit under this route's 60-second timeout (see fetch_fixtures.py).
 app.post('/api/admin/fetch-fixtures', async (req, res) => {
   if (!checkFetchCooldown(res, 'fixtures')) return;
   const scriptPath = path.join(__dirname, '..', 'scraper', 'fetch_fixtures.py');

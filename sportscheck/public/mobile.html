@@ -921,13 +921,13 @@
       var fixturesRes = await fetch('/api/admin/fetch-fixtures', { method: 'POST' });
       var fixturesData = await fixturesRes.json();
 
-      status.textContent = standingsData.stored + ' teams, ' + (fixturesData.success ? fixturesData.stored + ' fixtures' : 'fixtures failed') + '. Fetching top scorers…';
+      status.textContent = standingsData.stored + ' teams, ' + (fixturesData.success ? fixturesData.stored + ' fixtures' : 'fixtures failed: ' + (fixturesData.error || 'unknown')) + '. Fetching top scorers…';
       var scorersRes = await fetch('/api/admin/fetch-scorers', { method: 'POST' });
       var scorersData = await scorersRes.json();
 
       var parts = [standingsData.stored + ' teams'];
-      parts.push(fixturesData.success ? fixturesData.stored + ' fixtures' : 'fixtures failed');
-      parts.push(scorersData.success ? scorersData.stored + ' scorers' : 'scorers failed');
+      parts.push(fixturesData.success ? fixturesData.stored + ' fixtures' : 'fixtures failed: ' + (fixturesData.error || 'unknown'));
+      parts.push(scorersData.success ? scorersData.stored + ' scorers' : 'scorers failed: ' + (scorersData.error || 'unknown'));
 
       var historyRes = await fetch('/api/admin/start-history-backfill', { method: 'POST' });
       var historyData = await historyRes.json();

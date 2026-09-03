@@ -3,15 +3,19 @@
 Fetches Premier League fixtures for a window of days around today and
 prints the result as JSON.
 
-WEEKS_BACK/WEEKS_FORWARD are deliberately small (4 weeks each) for now —
-without a persistent disk, everything gets wiped on every restart/redeploy,
-so there's no point fetching further than what's actually useful to look
-at during testing. Bump these up once running somewhere with real
-persistent storage (e.g. the Raspberry Pi).
+WEEKS_BACK/WEEKS_FORWARD are deliberately small (1 week each) — this
+route runs SYNCHRONOUSLY (the frontend awaits it for an immediate count
+and list refresh), and Node's exec timeout for synchronous calls is 60
+seconds. At 1.2s minimum per rate-limited request, 1 week each way is 15
+day-checks (~18s), comfortably under that ceiling with real margin.
 
-Bounded and rate-limited (see rate_limiter.py) rather than an unbounded
-scan. At 4 weeks each direction, that's 57 day-checks — about a minute
-at the 50/min limit.
+The wider ±4 week view comes from start-history-backfill instead, which
+runs as a background process specifically because it doesn't fit under
+that same 60-second ceiling — 4 weeks each way is 57 day-checks, whose
+rate-limited pacing alone (68.4s) already exceeds 60s before any actual
+network time on top. Same underlying data, this one's just the fast
+synchronous slice for quick feedback; the wider historical view isn't
+time-boxed the same way since it's never awaited.
 
 Same contract as fetch_standings.py: always valid JSON on stdout, success
 or failure, never a raw traceback.
@@ -23,8 +27,8 @@ import json
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-WEEKS_BACK = 4
-WEEKS_FORWARD = 4
+WEEKS_BACK = 1
+WEEKS_FORWARD = 1
 
 try:
     from flashscore_scraper.fixtures import get_fixtures
