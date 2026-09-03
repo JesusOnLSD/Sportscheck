@@ -82,6 +82,19 @@ app.get('/api/admin/scorers-debug', async (req, res) => {
   res.json(result);
 });
 
+// Diagnostic only — shows every stored fixture for a league, unfiltered
+// by date, exactly as stored. Lets a "date X shows nothing" report be
+// checked against what actually landed, rather than guessing dates one
+// at a time.
+app.get('/api/admin/fixtures-debug', (req, res) => {
+  const league = req.query.league || 'Premier League';
+  const rows = db.prepare(`
+    SELECT fixture_id AS fixtureId, kickoff_utc AS kickoffUtcRaw, home_team AS homeTeam, away_team AS awayTeam, status, updated_at AS updatedAt
+    FROM fixtures WHERE league = ? ORDER BY kickoff_utc ASC
+  `).all(league);
+  res.json({ league, count: rows.length, fixtures: rows });
+});
+
 // Cooldown, tracked separately PER ENDPOINT rather than one shared timer.
 // The Python rate limiter (50/min) only protects calls *within* one
 // script's run — each spawn is a fresh process, so its in-memory timing
