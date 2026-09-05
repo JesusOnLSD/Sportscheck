@@ -82,6 +82,16 @@ app.get('/api/admin/scorers-debug', async (req, res) => {
   res.json(result);
 });
 
+// Diagnostic only — tests whether a specific past season's standings and
+// scorers resolve the same way the current season's already-proven
+// mechanism does. Pass ?season=2023-2024 (defaults to 2023-2024 if omitted).
+app.get('/api/admin/historical-season-debug', async (req, res) => {
+  const season = req.query.season || '2023-2024';
+  const scriptPath = path.join(__dirname, '..', 'scraper', 'debug_historical_season.py');
+  const result = await runPythonScript(scriptPath, [season]);
+  res.json(result);
+});
+
 // Diagnostic only — shows every stored fixture for a league, unfiltered
 // by date, exactly as stored. Lets a "date X shows nothing" report be
 // checked against what actually landed, rather than guessing dates one
@@ -191,6 +201,76 @@ app.post('/api/admin/fetch-scorers', async (req, res) => {
 
   console.log(`[scraper] Fetched and stored ${count} Premier League top scorers`);
   res.json({ success: true, stored: count });
+});
+
+// Historical season fetch — same standings/scorers storage as the
+// current season, just for a specific past year. Frontend sends the
+// short label ("2023-24" matching the dropdown), converted here into
+// both Flashscore's full-year slug ("2023-2024") and the storage key
+// (just the first year, "2023", matching the existing convention).
+app.post('/api/admin/fetch-historical-season/:seasonLabel', async (req, res) => {
+  const seasonLabel = req.params.seasonLabel;
+  if (!checkFetchCooldown(res, 'historical-season:' + seasonLabel)) return;
+
+  const firstYear = parseInt(seasonLabel.split('-')[0], 10);
+  if (!firstYear || Number.isNaN(firstYear)) {
+    return res.status(400).json({ error: 'Invalid season label format, expected e.g. "2023-24"' });
+  }
+  const fullSeasonSlug = `${firstYear}-${firstYear + 1}`;
+  const storageSeasonKey = String(firstYear);
+
+  const scriptPath = path.join(__dirname, '..', 'scraper', 'fetch_historical_season.py');
+  const result = await runPythonScript(scriptPath, [fullSeasonSlug]);
+
+  if (!result.success) {
+    return res.status(500).json({ error: result.error || 'Unknown scraper error' });
+  }
+
+  const now = new Date().toISOString();
+
+  const upsertStanding = db.prepare(`
+    INSERT INTO standings (league, season, position, team, played, won, drawn, lost, goals_for, goals_against, points, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(league, season, team) DO UPDATE SET
+      position=excluded.position, played=excluded.played, won=excluded.won, drawn=excluded.drawn,
+      lost=excluded.lost, goals_for=excluded.goals_for, goals_against=excluded.goals_against,
+      points=excluded.points, updated_at=excluded.updated_at
+  `);
+  let standingsCount = 0;
+  db.exec('BEGIN');
+  try {
+    for (const r of result.standings) {
+      upsertStanding.run('Premier League', storageSeasonKey, r.position, r.team, r.played, r.won, r.drawn, r.lost, r.goalsFor, r.goalsAgainst, r.points, now);
+      standingsCount++;
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+
+  const upsertScorer = db.prepare(`
+    INSERT INTO scorers (league, season, rank, player, team, goals, assists, nationality, position_name, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(league, season, player, team) DO UPDATE SET
+      rank=excluded.rank, goals=excluded.goals, assists=excluded.assists,
+      nationality=excluded.nationality, position_name=excluded.position_name, updated_at=excluded.updated_at
+  `);
+  let scorersCount = 0;
+  db.exec('BEGIN');
+  try {
+    for (const r of result.scorers) {
+      upsertScorer.run('Premier League', storageSeasonKey, r.rank, r.player, r.team, r.goals, r.assists, r.nationality, r.position, now);
+      scorersCount++;
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+
+  console.log(`[scraper] Fetched historical season ${fullSeasonSlug}: ${standingsCount} standings, ${scorersCount} scorers`);
+  res.json({ success: true, seasonLabel, standingsStored: standingsCount, scorersStored: scorersCount });
 });
 
 // --- 5-year historical fixtures backfill ---
@@ -509,7 +589,7 @@ app.get('/api/general-stats', (req, res) => {
 
   const allFixtures = db.prepare(`
     SELECT home_team, away_team, home_score, away_score FROM fixtures
-    WHERE league = ? AND (home_team = ? OR away_team = ?) AND status = 'finished' AND kickoff_utc >= datetime('now', '-5 years')
+    WHERE league = ? AND (home_team = ? OR away_team = ?) AND status = 'finished' AND datetime(kickoff_utc) >= datetime('now', '-5 years')
   `).all(league, team, team);
   const record = computeRecord(allFixtures, team);
 
@@ -517,7 +597,7 @@ app.get('/api/general-stats', (req, res) => {
     SELECT f.home_team, f.away_team, md.stats_json
     FROM fixtures f JOIN match_detail md ON md.fixture_id = f.fixture_id
     WHERE f.league = ? AND (f.home_team = ? OR f.away_team = ?) AND f.status = 'finished'
-      AND f.kickoff_utc >= datetime('now', '-5 years')
+      AND datetime(f.kickoff_utc) >= datetime('now', '-5 years')
   `).all(league, team, team);
   const { matchesWithStats, stats } = aggregateStatsForFixtures(statsRows, team);
 
@@ -535,7 +615,7 @@ app.get('/api/opponent-stats-full', (req, res) => {
   const rows = db.prepare(`
     SELECT f.home_team, f.away_team, md.stats_json
     FROM fixtures f JOIN match_detail md ON md.fixture_id = f.fixture_id
-    WHERE f.league = ? AND f.status = 'finished' AND f.kickoff_utc >= datetime('now', '-5 years')
+    WHERE f.league = ? AND f.status = 'finished' AND datetime(f.kickoff_utc) >= datetime('now', '-5 years')
       AND ((f.home_team = ? AND f.away_team = ?) OR (f.home_team = ? AND f.away_team = ?))
   `).all(league, teamA, teamB, teamB, teamA);
 
@@ -650,7 +730,7 @@ app.get('/api/h2h-meetings', (req, res) => {
     FROM fixtures
     WHERE league = ? AND status = 'finished'
       AND ((home_team = ? AND away_team = ?) OR (home_team = ? AND away_team = ?))
-      AND kickoff_utc >= datetime('now', '-5 years')
+      AND datetime(kickoff_utc) >= datetime('now', '-5 years')
     ORDER BY kickoff_utc DESC
     LIMIT ?
   `).all(league, teamA, teamB, teamB, teamA, limit);
@@ -661,7 +741,7 @@ app.get('/api/h2h-meetings', (req, res) => {
     SELECT COUNT(*) AS total FROM fixtures
     WHERE league = ? AND status = 'finished'
       AND ((home_team = ? AND away_team = ?) OR (home_team = ? AND away_team = ?))
-      AND kickoff_utc >= datetime('now', '-5 years')
+      AND datetime(kickoff_utc) >= datetime('now', '-5 years')
   `).get(league, teamA, teamB, teamB, teamA);
 
   res.json({ league, teamA, teamB, limit, total: totalRow.total, meetings: rows });
@@ -680,10 +760,43 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // detail entirely — never re-fetch something we already have for good.
 let scheduledFetchRunning = false;
 const MAX_MATCH_DETAILS_PER_RUN = 100; // ~8 min of work per run (100 matches × 4 rate-limited calls each), comfortably under the 1hr window — clears a full 5-year backlog (~1900 matches) in about 19 hourly runs instead of 127
+let fullCatchupProgress = { running: false, totalToFetch: 0, totalDone: 0, startedAt: null, lastUpdate: null };
+
+// Shared by both the regular hourly job and the manual "fetch everything
+// now" catch-up — same query, same per-match fetch, just a different
+// LIMIT. Each match saves to the database immediately as it's fetched
+// (not batched), so this is safe to interrupt at any point — nothing
+// already done gets lost, unlike the earlier fixtures-backfill issue.
+function findFixturesNeedingDetail(limit) {
+  return db.prepare(`
+    SELECT f.fixture_id FROM fixtures f
+    LEFT JOIN match_detail md ON md.fixture_id = f.fixture_id
+    WHERE datetime(f.kickoff_utc) <= datetime('now')
+      AND (f.status != 'finished' OR md.fixture_id IS NULL OR md.stats_json IS NULL OR md.stats_json = '[]')
+    ORDER BY f.kickoff_utc DESC
+    LIMIT ?
+  `).all(limit);
+}
+
+async function fetchMatchDetailsForList(fixtureRows, base, logPrefix, progressTracker) {
+  for (const row of fixtureRows) {
+    try {
+      const r = await fetch(`${base}/api/admin/fetch-match-detail/${row.fixture_id}`, { method: 'POST' });
+      const d = await r.json();
+      console.log(`[${logPrefix}] match ${row.fixture_id}:`, d.success ? 'updated' : d.error);
+    } catch (err) {
+      console.error(`[${logPrefix}] match ${row.fixture_id} failed:`, err.message);
+    }
+    if (progressTracker) {
+      progressTracker.totalDone += 1;
+      progressTracker.lastUpdate = new Date().toISOString();
+    }
+  }
+}
 
 async function runScheduledFetch() {
   if (scheduledFetchRunning) {
-    console.log('[scheduled-fetch] Previous run still in progress, skipping this tick.');
+    console.log('[scheduled-fetch] Previous run (or a manual catch-up) still in progress, skipping this tick.');
     return;
   }
   scheduledFetchRunning = true;
@@ -714,25 +827,9 @@ async function runScheduledFetch() {
     console.error('[scheduled-fetch] scorers failed:', err.message);
   }
 
-  const needsDetail = db.prepare(`
-    SELECT f.fixture_id FROM fixtures f
-    LEFT JOIN match_detail md ON md.fixture_id = f.fixture_id
-    WHERE f.status != 'finished' OR md.fixture_id IS NULL OR md.stats_json IS NULL OR md.stats_json = '[]'
-    ORDER BY f.kickoff_utc DESC
-    LIMIT ?
-  `).all(MAX_MATCH_DETAILS_PER_RUN);
-
-  console.log(`[scheduled-fetch] ${needsDetail.length} match(es) need detail this run (already-finished matches with stats are skipped)`);
-
-  for (const row of needsDetail) {
-    try {
-      const r = await fetch(`${base}/api/admin/fetch-match-detail/${row.fixture_id}`, { method: 'POST' });
-      const d = await r.json();
-      console.log(`[scheduled-fetch] match ${row.fixture_id}:`, d.success ? 'updated' : d.error);
-    } catch (err) {
-      console.error(`[scheduled-fetch] match ${row.fixture_id} failed:`, err.message);
-    }
-  }
+  const needsDetail = findFixturesNeedingDetail(MAX_MATCH_DETAILS_PER_RUN);
+  console.log(`[scheduled-fetch] ${needsDetail.length} match(es) need detail this run (already-finished matches with stats are skipped, and future matches that haven't kicked off yet are excluded — nothing to fetch until they start)`);
+  await fetchMatchDetailsForList(needsDetail, base, 'scheduled-fetch', null);
 
   console.log('[scheduled-fetch] Run complete.');
   scheduledFetchRunning = false;
@@ -740,6 +837,37 @@ async function runScheduledFetch() {
 
 const SCHEDULED_FETCH_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 setInterval(runScheduledFetch, SCHEDULED_FETCH_INTERVAL_MS);
+
+// Manual, one-time "fetch everything now" — same underlying logic as the
+// hourly job, just no cap. Genuinely takes hours for a large backlog
+// (~1900 matches ≈ 2.5+ hours), so this returns immediately and runs in
+// the background; check progress via /api/admin/full-catchup-status.
+app.post('/api/admin/force-full-stats-catchup', async (req, res) => {
+  if (scheduledFetchRunning) {
+    return res.status(409).json({ error: 'A fetch is already running (either the hourly job or a previous catch-up) — try again once it finishes.' });
+  }
+  const needsDetail = findFixturesNeedingDetail(100000); // effectively uncapped
+  if (needsDetail.length === 0) {
+    return res.json({ started: false, reason: 'Nothing to fetch — every stored match already has stats.' });
+  }
+
+  scheduledFetchRunning = true;
+  fullCatchupProgress = { running: true, totalToFetch: needsDetail.length, totalDone: 0, startedAt: new Date().toISOString(), lastUpdate: new Date().toISOString() };
+  const base = `http://localhost:${PORT}`;
+  console.log(`[full-catchup] Starting — ${needsDetail.length} matches to fetch, expect ~${Math.round(needsDetail.length * 4.8 / 60)} minutes.`);
+
+  fetchMatchDetailsForList(needsDetail, base, 'full-catchup', fullCatchupProgress).then(() => {
+    console.log('[full-catchup] Complete.');
+    fullCatchupProgress.running = false;
+    scheduledFetchRunning = false;
+  });
+
+  res.json({ started: true, totalToFetch: needsDetail.length, estimatedMinutes: Math.round(needsDetail.length * 4.8 / 60) });
+});
+
+app.get('/api/admin/full-catchup-status', (req, res) => {
+  res.json(fullCatchupProgress);
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

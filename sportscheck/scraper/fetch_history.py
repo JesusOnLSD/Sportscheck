@@ -35,7 +35,7 @@ from flashscore_scraper.fixtures import get_fixtures  # noqa: E402
 from rate_limiter import wait_for_rate_limit  # noqa: E402
 
 DEFAULT_DAYS_BACK = 1825  # 5 years — now running on persistent Pi storage, so a stalled or interrupted run no longer wipes anything (unlike Render's ephemeral disk)
-DEFAULT_DAYS_FORWARD = 28  # no need for a 5-year FORWARD window — fixtures aren't scheduled that far ahead
+DEFAULT_DAYS_FORWARD = 300  # covers a full season ahead — a PL season runs ~9-10 months, so this comfortably reaches the next one regardless of where in the current season "today" happens to be
 PRINT_EVERY_N_DAYS = 10
 
 

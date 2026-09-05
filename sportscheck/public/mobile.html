@@ -62,7 +62,7 @@
 
   .stat-row { margin-bottom: 14px; }
   .stat-row:last-child { margin-bottom: 0; }
-  .stat-row .labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 5px; }
+  .stat-row .labels { display: flex; justify-content: space-between; font-size: 14.4px; color: var(--text); margin-bottom: 5px; }
   .bar { display: flex; height: 6px; border-radius: 4px; overflow: hidden; background: var(--border); }
   .bar div.a { background: var(--text-muted); }
   .bar div.b { background: var(--accent-fill); }
@@ -112,7 +112,11 @@
   .tl-icon-goal { width: 18px; height: 18px; border-radius: 50%; background: var(--accent-fill); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; }
   .tl-score-badge { background: var(--surface-raised); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-weight: 700; font-size: 11px; }
 
-  .lineup-field-wrap { max-width: 340px; margin: 0 auto; }
+  .lineup-field-wrap { max-width: 476px; margin: 0 auto; }
+  .lineup-with-subs-wrap { display: flex; align-items: flex-start; gap: 10px; justify-content: center; }
+  .lineup-subs-col { flex: 0 1 100px; min-width: 72px; }
+  .lineup-subs-col h4 { font-size: 11px; font-weight: 700; color: var(--text-secondary); margin: 0 0 6px; }
+  .lineup-with-subs-wrap .lineup-field-wrap { flex: 0 1 auto; }
   .lineup-field-svg { width: 100%; height: auto; display: block; }
   .lineup-field-bg { fill: #1a3d2e; }
   .lineup-field-line { stroke: rgba(255,255,255,0.25); stroke-width: 2; }
@@ -120,7 +124,7 @@
   .lineup-home { fill: var(--text-muted); stroke: var(--surface); stroke-width: 2; }
   .lineup-away { fill: var(--accent-fill); stroke: var(--surface); stroke-width: 2; }
   .lineup-shirt-number { fill: #fff; font-size: 13px; font-weight: 700; font-family: inherit; pointer-events: none; }
-  .lineup-player-name { fill: #fff; font-size: 9px; font-weight: 600; font-family: inherit; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+  .lineup-player-name { fill: #fff; font-size: 10px; font-weight: 600; font-family: inherit; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
   .lineup-team-legend { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; font-size: 12px; font-weight: 600; }
   .lineup-legend-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
 
@@ -146,9 +150,25 @@
 
   .list-header { display: flex; align-items: flex-end; justify-content: space-between; padding: 4px 16px 14px; }
   .list-title { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-text); margin: 0 0 4px; }
-  .date-nav { display: flex; align-items: center; gap: 4px; }
-  .list-date { font-size: 10.5px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); margin: 0; min-width: 118px; text-align: center; }
-  .date-arrow { font-size: 20px; color: var(--text); cursor: pointer; padding: 3px; border-radius: 6px; display: flex; }
+  .date-nav { display: flex; align-items: center; gap: 4px; width: 188px; }
+  .list-date { font-size: 10.5px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); margin: 0; text-align: center; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .date-arrow { font-size: 20px; color: var(--text); cursor: pointer; padding: 3px; border-radius: 6px; display: flex; flex-shrink: 0; }
+
+  .calendar-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .calendar-modal { background: var(--surface-raised); border: 1px solid var(--border); border-radius: 14px; padding: 16px; width: 280px; max-width: 88vw; position: relative; box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+  .calendar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .calendar-nav-arrow { width: 20px; height: 20px; color: var(--text); cursor: pointer; flex-shrink: 0; }
+  .calendar-header-labels { display: flex; gap: 6px; font-size: 15px; font-weight: 700; color: var(--text); }
+  .calendar-month-label, .calendar-year-label { cursor: pointer; padding: 2px 5px; border-radius: 6px; }
+  .calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 10.5px; color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
+  .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .calendar-day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text); cursor: pointer; border-radius: 7px; }
+  .calendar-day.today { border: 1px solid var(--accent-fill); }
+  .calendar-day.selected { background: var(--accent-fill); color: #fff; font-weight: 700; }
+  .calendar-day.empty { cursor: default; }
+  .calendar-overlay-list { position: absolute; top: 52px; left: 16px; right: 16px; bottom: 16px; background: var(--surface-raised); border-radius: 10px; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 6px; }
+  .calendar-overlay-item { padding: 10px 4px; text-align: center; border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--text); }
+  .calendar-overlay-item.current { background: var(--accent-bg); color: var(--accent-text); font-weight: 700; }
   .date-arrow.disabled { color: var(--border); cursor: not-allowed; pointer-events: none; }
   .no-games { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 13px; }
 
@@ -199,11 +219,28 @@
         <p class="list-title">Soccer</p>
         <div class="date-nav">
           <svg viewBox="0 0 24 24" width="1em" height="1em" class="date-arrow" id="date-prev" onclick="changeDate(-1)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
-          <p class="list-date" id="list-date-text">Mon, 31 Aug 2026</p>
+          <p class="list-date" id="list-date-text" onclick="openCalendar()" style="cursor:pointer;">Mon, 31 Aug 2026</p>
           <svg viewBox="0 0 24 24" width="1em" height="1em" class="date-arrow" id="date-next" onclick="changeDate(1)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </div>
       </div>
       <svg viewBox="0 0 24 24" style="width:18px;height:18px;color:var(--text-secondary);" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
+    </div>
+
+    <div id="calendar-modal-backdrop" class="calendar-backdrop hidden" onclick="closeCalendarIfBackdrop(event)">
+      <div class="calendar-modal">
+        <div class="calendar-header">
+          <svg viewBox="0 0 24 24" class="calendar-nav-arrow" onclick="calendarPrevMonth()" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          <div class="calendar-header-labels">
+            <span class="calendar-month-label" id="calendar-month-label" onclick="toggleMonthList()">September</span>
+            <span class="calendar-year-label" id="calendar-year-label" onclick="toggleYearList()">2026</span>
+          </div>
+          <svg viewBox="0 0 24 24" class="calendar-nav-arrow" onclick="calendarNextMonth()" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </div>
+        <div class="calendar-weekdays"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>
+        <div id="calendar-grid" class="calendar-grid"></div>
+        <div id="calendar-month-list" class="calendar-overlay-list hidden"></div>
+        <div id="calendar-year-list" class="calendar-overlay-list hidden"></div>
+      </div>
     </div>
     <div class="comp-pills" id="country-pills"></div>
     <div class="league-pills" id="league-pills"></div>
@@ -532,16 +569,132 @@
     return dayAbbr[d.getDay()] + ', ' + d.getDate() + ' ' + monthAbbr[d.getMonth()] + ' ' + d.getFullYear();
   }
 
-  function changeDate(delta) {
-    var next = dateOffset + delta;
-    if (next < -14 || next > 14) return;
-    dateOffset = next;
+  function refreshDateDisplay() {
     var d = new Date(baseDate.getTime());
     d.setDate(d.getDate() + dateOffset);
     document.getElementById('list-date-text').textContent = formatListDate(d);
-    document.getElementById('date-prev').classList.toggle('disabled', dateOffset <= -14);
-    document.getElementById('date-next').classList.toggle('disabled', dateOffset >= 14);
+    document.getElementById('date-prev').classList.toggle('disabled', dateOffset <= -1830);
+    document.getElementById('date-next').classList.toggle('disabled', dateOffset >= 300);
     updateListContent();
+  }
+
+  function changeDate(delta) {
+    var next = dateOffset + delta;
+    if (next < -1830 || next > 300) return;
+    dateOffset = next;
+    refreshDateDisplay();
+  }
+
+  function daysBetween(date1, date2) {
+    var utc1 = Date.UTC(date1.getFullYear(), date1.getMonth(), date1.getDate());
+    var utc2 = Date.UTC(date2.getFullYear(), date2.getMonth(), date2.getDate());
+    return Math.round((utc2 - utc1) / (1000 * 60 * 60 * 24));
+  }
+
+  var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var calendarViewYear, calendarViewMonth;
+
+  function openCalendar() {
+    var d = new Date(baseDate.getTime());
+    d.setDate(d.getDate() + dateOffset);
+    calendarViewYear = d.getFullYear();
+    calendarViewMonth = d.getMonth();
+    document.getElementById('calendar-month-list').classList.add('hidden');
+    document.getElementById('calendar-year-list').classList.add('hidden');
+    renderCalendarGrid();
+    document.getElementById('calendar-modal-backdrop').classList.remove('hidden');
+  }
+
+  function closeCalendar() {
+    document.getElementById('calendar-modal-backdrop').classList.add('hidden');
+  }
+
+  function closeCalendarIfBackdrop(event) {
+    if (event.target.id === 'calendar-modal-backdrop') closeCalendar();
+  }
+
+  function renderCalendarGrid() {
+    document.getElementById('calendar-month-label').textContent = MONTH_NAMES[calendarViewMonth];
+    document.getElementById('calendar-year-label').textContent = calendarViewYear;
+
+    var today = new Date(baseDate.getTime());
+    var selected = new Date(baseDate.getTime());
+    selected.setDate(selected.getDate() + dateOffset);
+
+    var firstDayOfWeek = new Date(calendarViewYear, calendarViewMonth, 1).getDay();
+    var daysInMonth = new Date(calendarViewYear, calendarViewMonth + 1, 0).getDate();
+
+    var html = '';
+    for (var i = 0; i < firstDayOfWeek; i++) html += '<div class="calendar-day empty"></div>';
+    for (var day = 1; day <= daysInMonth; day++) {
+      var isToday = today.getFullYear() === calendarViewYear && today.getMonth() === calendarViewMonth && today.getDate() === day;
+      var isSelected = selected.getFullYear() === calendarViewYear && selected.getMonth() === calendarViewMonth && selected.getDate() === day;
+      var cls = 'calendar-day' + (isToday ? ' today' : '') + (isSelected ? ' selected' : '');
+      html += '<div class="' + cls + '" onclick="selectCalendarDay(' + day + ')">' + day + '</div>';
+    }
+    document.getElementById('calendar-grid').innerHTML = html;
+  }
+
+  function selectCalendarDay(day) {
+    var target = new Date(calendarViewYear, calendarViewMonth, day);
+    var offset = daysBetween(baseDate, target);
+    if (offset < -1830 || offset > 300) return;
+    dateOffset = offset;
+    refreshDateDisplay();
+    closeCalendar();
+  }
+
+  function calendarPrevMonth() {
+    calendarViewMonth--;
+    if (calendarViewMonth < 0) { calendarViewMonth = 11; calendarViewYear--; }
+    renderCalendarGrid();
+  }
+
+  function calendarNextMonth() {
+    calendarViewMonth++;
+    if (calendarViewMonth > 11) { calendarViewMonth = 0; calendarViewYear++; }
+    renderCalendarGrid();
+  }
+
+  function toggleMonthList() {
+    document.getElementById('calendar-year-list').classList.add('hidden');
+    var listEl = document.getElementById('calendar-month-list');
+    var isHidden = listEl.classList.contains('hidden');
+    if (isHidden) {
+      listEl.innerHTML = MONTH_NAMES.map(function(name, i) {
+        var cls = 'calendar-overlay-item' + (i === calendarViewMonth ? ' current' : '');
+        return '<div class="' + cls + '" onclick="selectCalendarMonth(' + i + ')">' + name.slice(0, 3) + '</div>';
+      }).join('');
+    }
+    listEl.classList.toggle('hidden');
+  }
+
+  function toggleYearList() {
+    document.getElementById('calendar-month-list').classList.add('hidden');
+    var listEl = document.getElementById('calendar-year-list');
+    var isHidden = listEl.classList.contains('hidden');
+    if (isHidden) {
+      var todayYear = baseDate.getFullYear();
+      var years = [];
+      for (var y = todayYear - 5; y <= todayYear + 1; y++) years.push(y);
+      listEl.innerHTML = years.map(function(y) {
+        var cls = 'calendar-overlay-item' + (y === calendarViewYear ? ' current' : '');
+        return '<div class="' + cls + '" onclick="selectCalendarYear(' + y + ')">' + y + '</div>';
+      }).join('');
+    }
+    listEl.classList.toggle('hidden');
+  }
+
+  function selectCalendarMonth(monthIndex) {
+    calendarViewMonth = monthIndex;
+    document.getElementById('calendar-month-list').classList.add('hidden');
+    renderCalendarGrid();
+  }
+
+  function selectCalendarYear(year) {
+    calendarViewYear = year;
+    document.getElementById('calendar-year-list').classList.add('hidden');
+    renderCalendarGrid();
   }
 
   var soccerCountries = [
@@ -863,6 +1016,22 @@
     return yearLabel.split('-')[0];
   }
 
+  var CURRENT_SEASON_LABEL = '2026-27';
+  var historicalFetchAttempted = {};
+
+  async function ensureHistoricalSeasonFetched(year, statusEl) {
+    if (year === CURRENT_SEASON_LABEL || historicalFetchAttempted[year]) return true;
+    historicalFetchAttempted[year] = true;
+    if (statusEl) statusEl.innerHTML = '<tr><td style="padding:16px 4px;color:var(--text-muted);font-size:12px;">Fetching ' + year + '…</td></tr>';
+    try {
+      var res = await fetch('/api/admin/fetch-historical-season/' + encodeURIComponent(year), { method: 'POST' });
+      var data = await res.json();
+      return !!data.success;
+    } catch (err) {
+      return false;
+    }
+  }
+
   async function selectYear(kind, year) {
     if (kind === 'standings') {
       var tbl = document.getElementById('standings-table-el');
@@ -873,7 +1042,16 @@
         var res = await fetch('/api/standings?league=' + encodeURIComponent('Premier League') + '&season=' + apiSeasonFromLabel(year));
         var data = await res.json();
         if (!data.loaded || !data.standings || data.standings.length === 0) {
-          tbl.innerHTML = '<tr><td style="padding:16px 4px;color:var(--text-muted);font-size:12px;">Not connected yet — tap "Fetch now" above.</td></tr>';
+          var fetched = await ensureHistoricalSeasonFetched(year, tbl);
+          if (fetched) {
+            res = await fetch('/api/standings?league=' + encodeURIComponent('Premier League') + '&season=' + apiSeasonFromLabel(year));
+            data = await res.json();
+          }
+        }
+        if (!data.loaded || !data.standings || data.standings.length === 0) {
+          tbl.innerHTML = year === CURRENT_SEASON_LABEL
+            ? '<tr><td style="padding:16px 4px;color:var(--text-muted);font-size:12px;">Not connected yet — tap "Fetch now" above.</td></tr>'
+            : '<tr><td style="padding:16px 4px;color:var(--text-muted);font-size:12px;">No standings found for ' + year + '.</td></tr>';
           return;
         }
         title.textContent = 'Updated ' + new Date(data.updatedAt).toLocaleDateString();
@@ -895,7 +1073,16 @@
         var sres = await fetch('/api/scorers?league=' + encodeURIComponent('Premier League') + '&season=' + apiSeasonFromLabel(year));
         var sdata = await sres.json();
         if (!sdata.loaded || !sdata.scorers || sdata.scorers.length === 0) {
-          stbl.innerHTML = '<tr><td style="padding:16px 4px;color:var(--text-muted);font-size:12px;">Not connected yet — tap "Fetch now" above.</td></tr>';
+          var sfetched = await ensureHistoricalSeasonFetched(year, stbl);
+          if (sfetched) {
+            sres = await fetch('/api/scorers?league=' + encodeURIComponent('Premier League') + '&season=' + apiSeasonFromLabel(year));
+            sdata = await sres.json();
+          }
+        }
+        if (!sdata.loaded || !sdata.scorers || sdata.scorers.length === 0) {
+          stbl.innerHTML = year === CURRENT_SEASON_LABEL
+            ? '<tr><td style="padding:16px 4px;color:var(--text-muted);font-size:12px;">Not connected yet — tap "Fetch now" above.</td></tr>'
+            : '<tr><td style="padding:16px 4px;color:var(--text-muted);font-size:12px;">No scorers found for ' + year + '.</td></tr>';
           return;
         }
         stitle.textContent = 'Updated ' + new Date(sdata.updatedAt).toLocaleDateString();
@@ -993,6 +1180,8 @@
     return (teamName || '???').split(' ').map(function(w) { return w[0]; }).join('').slice(0, 3).toUpperCase();
   }
 
+  var FIELD_SCALE = 1.4; // field 40% bigger; circle radius stays unscaled below so players stay the same absolute size
+
   function computeFieldPositions(formation, players, isHome) {
     var segments = formation.split('-').map(Number);
     var positions = [];
@@ -1001,9 +1190,9 @@
       var linePlayers = players.slice(playerIndex, playerIndex + lineSize);
       playerIndex += lineSize;
       linePlayers.forEach(function(player, posInLine) {
-        var x = lineSize === 1 ? 200 : 40 + (posInLine * (320 / (lineSize - 1)));
-        var lineY = 580 - (lineIndex * (270 / (segments.length - 1)));
-        var y = isHome ? lineY : (600 - lineY);
+        var x = (lineSize === 1 ? 200 : 40 + (posInLine * (320 / (lineSize - 1)))) * FIELD_SCALE;
+        var lineY = (580 - (lineIndex * (270 / (segments.length - 1)))) * FIELD_SCALE;
+        var y = isHome ? lineY : ((600 * FIELD_SCALE) - lineY);
         positions.push(Object.assign({}, player, { x: x, y: y }));
       });
     });
@@ -1022,20 +1211,22 @@
     var awayPos = awayFormation ? computeFieldPositions(awayFormation, awayPlayers, false) : [];
     var markers = homePos.map(function(p) { return playerMarkerSVG(p, 'lineup-home'); }).join('') +
       awayPos.map(function(p) { return playerMarkerSVG(p, 'lineup-away'); }).join('');
-    return '<svg viewBox="0 0 400 600" class="lineup-field-svg">' +
-      '<rect x="0" y="0" width="400" height="600" class="lineup-field-bg" />' +
-      '<line x1="0" y1="300" x2="400" y2="300" class="lineup-field-line" />' +
-      '<circle cx="200" cy="300" r="50" class="lineup-field-line-fill" />' +
-      '<rect x="100" y="0" width="200" height="60" class="lineup-field-line-fill" />' +
-      '<rect x="100" y="540" width="200" height="60" class="lineup-field-line-fill" />' +
+    var w = 400 * FIELD_SCALE, h = 600 * FIELD_SCALE;
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" class="lineup-field-svg">' +
+      '<rect x="0" y="0" width="' + w + '" height="' + h + '" class="lineup-field-bg" />' +
+      '<line x1="0" y1="' + (300 * FIELD_SCALE) + '" x2="' + w + '" y2="' + (300 * FIELD_SCALE) + '" class="lineup-field-line" />' +
+      '<circle cx="' + (200 * FIELD_SCALE) + '" cy="' + (300 * FIELD_SCALE) + '" r="' + (50 * FIELD_SCALE) + '" class="lineup-field-line-fill" />' +
+      '<rect x="' + (100 * FIELD_SCALE) + '" y="0" width="' + (200 * FIELD_SCALE) + '" height="' + (60 * FIELD_SCALE) + '" class="lineup-field-line-fill" />' +
+      '<rect x="' + (100 * FIELD_SCALE) + '" y="' + (540 * FIELD_SCALE) + '" width="' + (200 * FIELD_SCALE) + '" height="' + (60 * FIELD_SCALE) + '" class="lineup-field-line-fill" />' +
       markers + '</svg>';
   }
 
-  function lineupRowsHTML(players) {
-    if (!players || players.length === 0) return '<p class="disclaimer" style="margin:0;">No player list available.</p>';
-    return players.map(function(p) {
-      var num = p.number != null ? p.number + '. ' : '';
-      return '<div class="lineup-xi">' + num + (p.name || 'Unknown') + '</div>';
+  function subsListHTML(players) {
+    var subs = (players || []).filter(function(p) { return p.section !== 'Starting Lineups'; });
+    if (subs.length === 0) return '<p class="disclaimer" style="margin:0;">No substitutes listed.</p>';
+    return subs.map(function(p) {
+      var num = p.shirt_number != null ? p.shirt_number + '. ' : '';
+      return '<div class="lineup-xi">' + num + (p.short_name || p.name || 'Unknown') + '</div>';
     }).join('');
   }
 
@@ -1087,11 +1278,20 @@
         var lhtml = '<h3>Confirmed lineups</h3>';
         if (homeL && awayL && homeL.formation && awayL.formation) {
           lhtml += '<div class="lineup-team-legend"><span><span class="lineup-legend-dot" style="background:var(--text-muted);"></span>' + currentHomeTeam + ' (' + homeL.formation + ')</span><span>' + awayL.formation + ' (' + currentAwayTeam + ')<span class="lineup-legend-dot" style="background:var(--accent-fill);margin-left:5px;margin-right:0;"></span></span></div>';
-          lhtml += '<div class="lineup-field-wrap">' + fieldSVG(homeL.formation, homeL.players, awayL.formation, awayL.players) + '</div>';
+          lhtml += '<div class="lineup-with-subs-wrap">' +
+            '<div class="lineup-subs-col"><h4>Substitutes</h4>' + subsListHTML(homeL.players) + '</div>' +
+            '<div class="lineup-field-wrap">' + fieldSVG(homeL.formation, homeL.players, awayL.formation, awayL.players) + '</div>' +
+            '<div class="lineup-subs-col"><h4>Substitutes</h4>' + subsListHTML(awayL.players) + '</div>' +
+            '</div>';
+        } else {
+          data.lineups.forEach(function(l) {
+            lhtml += '<p style="font-weight:600;margin-top:14px;">' + l.team + (l.formation ? ' (' + l.formation + ')' : '') + '</p>' +
+              (l.players || []).map(function(p) {
+                var num = p.shirt_number != null ? p.shirt_number + '. ' : '';
+                return '<div class="lineup-xi">' + num + (p.short_name || p.name || 'Unknown') + '</div>';
+              }).join('');
+          });
         }
-        data.lineups.forEach(function(l) {
-          lhtml += '<p style="font-weight:600;margin-top:14px;">' + l.team + (l.formation ? ' (' + l.formation + ')' : '') + '</p>' + lineupRowsHTML(l.players);
-        });
         document.getElementById('lineup-confirmed-card').innerHTML = lhtml;
       } else {
         document.getElementById('lineup-confirmed-card').innerHTML = '<h3>Confirmed lineups</h3><p class="body-text">Not fetched yet — open Match Summary.</p>';
@@ -1217,7 +1417,10 @@
     stats.filter(function(s) { return s.period === 'Match'; }).forEach(function(s) {
       if (seen[s.stat]) return;
       seen[s.stat] = true;
-      rows.push([s.home, s.stat, s.away, 50, 50]);
+      var homeNum = parseFloat(s.home) || 0;
+      var awayNum = parseFloat(s.away) || 0;
+      var perc = barPercents(homeNum, awayNum);
+      rows.push([s.home, s.stat, s.away, perc[0], perc[1]]);
     });
     return rows;
   }
