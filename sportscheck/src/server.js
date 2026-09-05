@@ -670,8 +670,80 @@ app.get('/api/h2h-meetings', (req, res) => {
 // Serve the frontend (the HTML/CSS/JS files) as static assets.
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// --- Hourly scheduled data refresh ---
+// Standings/fixtures/scorers are each a single cheap request no matter
+// what, so those just refresh every run. Match detail is the expensive
+// part (4 rate-limited calls per match), so it's the one place a real
+// "memory" matters: skip any match already marked finished with stats
+// already stored, since that data is locked in and will never change.
+// Only fetch matches that are still live, still scheduled, or missing
+// detail entirely — never re-fetch something we already have for good.
+let scheduledFetchRunning = false;
+const MAX_MATCH_DETAILS_PER_RUN = 100; // ~8 min of work per run (100 matches × 4 rate-limited calls each), comfortably under the 1hr window — clears a full 5-year backlog (~1900 matches) in about 19 hourly runs instead of 127
+
+async function runScheduledFetch() {
+  if (scheduledFetchRunning) {
+    console.log('[scheduled-fetch] Previous run still in progress, skipping this tick.');
+    return;
+  }
+  scheduledFetchRunning = true;
+  const base = `http://localhost:${PORT}`;
+  console.log('[scheduled-fetch] Starting...');
+
+  try {
+    const r = await fetch(`${base}/api/admin/fetch-standings`, { method: 'POST' });
+    const d = await r.json();
+    console.log('[scheduled-fetch] standings:', d.success ? `${d.stored} teams` : d.error);
+  } catch (err) {
+    console.error('[scheduled-fetch] standings failed:', err.message);
+  }
+
+  try {
+    const r = await fetch(`${base}/api/admin/fetch-fixtures`, { method: 'POST' });
+    const d = await r.json();
+    console.log('[scheduled-fetch] fixtures:', d.success ? `${d.stored} fixtures` : d.error);
+  } catch (err) {
+    console.error('[scheduled-fetch] fixtures failed:', err.message);
+  }
+
+  try {
+    const r = await fetch(`${base}/api/admin/fetch-scorers`, { method: 'POST' });
+    const d = await r.json();
+    console.log('[scheduled-fetch] scorers:', d.success ? `${d.stored} scorers` : d.error);
+  } catch (err) {
+    console.error('[scheduled-fetch] scorers failed:', err.message);
+  }
+
+  const needsDetail = db.prepare(`
+    SELECT f.fixture_id FROM fixtures f
+    LEFT JOIN match_detail md ON md.fixture_id = f.fixture_id
+    WHERE f.status != 'finished' OR md.fixture_id IS NULL OR md.stats_json IS NULL OR md.stats_json = '[]'
+    ORDER BY f.kickoff_utc DESC
+    LIMIT ?
+  `).all(MAX_MATCH_DETAILS_PER_RUN);
+
+  console.log(`[scheduled-fetch] ${needsDetail.length} match(es) need detail this run (already-finished matches with stats are skipped)`);
+
+  for (const row of needsDetail) {
+    try {
+      const r = await fetch(`${base}/api/admin/fetch-match-detail/${row.fixture_id}`, { method: 'POST' });
+      const d = await r.json();
+      console.log(`[scheduled-fetch] match ${row.fixture_id}:`, d.success ? 'updated' : d.error);
+    } catch (err) {
+      console.error(`[scheduled-fetch] match ${row.fixture_id} failed:`, err.message);
+    }
+  }
+
+  console.log('[scheduled-fetch] Run complete.');
+  scheduledFetchRunning = false;
+}
+
+const SCHEDULED_FETCH_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+setInterval(runScheduledFetch, SCHEDULED_FETCH_INTERVAL_MS);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Sportscheck backend running on port ${PORT}`);
-  console.log('No scraper or scheduler active yet — frontend-only pass. Database is present but empty.');
+  console.log('Hourly scheduled fetch active — first run in 15s, then every hour.');
+  setTimeout(runScheduledFetch, 15000); // give the server a moment to fully initialize first
 });

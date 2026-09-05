@@ -112,6 +112,18 @@
   .tl-icon-goal { width: 18px; height: 18px; border-radius: 50%; background: var(--accent-fill); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; }
   .tl-score-badge { background: var(--surface-raised); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-weight: 700; font-size: 11px; }
 
+  .lineup-field-wrap { max-width: 340px; margin: 0 auto; }
+  .lineup-field-svg { width: 100%; height: auto; display: block; }
+  .lineup-field-bg { fill: #1a3d2e; }
+  .lineup-field-line { stroke: rgba(255,255,255,0.25); stroke-width: 2; }
+  .lineup-field-line-fill { fill: none; stroke: rgba(255,255,255,0.25); stroke-width: 2; }
+  .lineup-home { fill: var(--text-muted); stroke: var(--surface); stroke-width: 2; }
+  .lineup-away { fill: var(--accent-fill); stroke: var(--surface); stroke-width: 2; }
+  .lineup-shirt-number { fill: #fff; font-size: 13px; font-weight: 700; font-family: inherit; pointer-events: none; }
+  .lineup-player-name { fill: #fff; font-size: 9px; font-weight: 600; font-family: inherit; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+  .lineup-team-legend { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; font-size: 12px; font-weight: 600; }
+  .lineup-legend-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+
   .season-select { width: 100%; padding: 8px 12px; font-size: 13px; font-weight: 600; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239AA7B5' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
 
   .lineup-xi { font-size: 12.5px; color: var(--text-secondary); line-height: 2; }
@@ -961,7 +973,9 @@
     btn.disabled = false;
     btn.textContent = 'Fetch now';
   }
-  runFetch();
+  // No longer auto-fetching on page load — data now refreshes via an
+  // hourly server-side schedule instead (see server.js). This button
+  // stays as a manual override for whenever you want fresh data right now.
 
   var currentSoccerFixtureId = null;
   var currentHomeTeam = null;
@@ -977,6 +991,44 @@
 
   function crestCode(teamName) {
     return (teamName || '???').split(' ').map(function(w) { return w[0]; }).join('').slice(0, 3).toUpperCase();
+  }
+
+  function computeFieldPositions(formation, players, isHome) {
+    var segments = formation.split('-').map(Number);
+    var positions = [];
+    var playerIndex = 0;
+    segments.forEach(function(lineSize, lineIndex) {
+      var linePlayers = players.slice(playerIndex, playerIndex + lineSize);
+      playerIndex += lineSize;
+      linePlayers.forEach(function(player, posInLine) {
+        var x = lineSize === 1 ? 200 : 40 + (posInLine * (320 / (lineSize - 1)));
+        var lineY = 580 - (lineIndex * (270 / (segments.length - 1)));
+        var y = isHome ? lineY : (600 - lineY);
+        positions.push(Object.assign({}, player, { x: x, y: y }));
+      });
+    });
+    return positions;
+  }
+
+  function playerMarkerSVG(p, colorClass) {
+    var label = (p.short_name || p.name || '').split(' ')[0];
+    return '<g><circle cx="' + p.x + '" cy="' + p.y + '" r="16" class="' + colorClass + '" />' +
+      '<text x="' + p.x + '" y="' + (p.y + 5) + '" text-anchor="middle" class="lineup-shirt-number">' + (p.shirt_number || '') + '</text>' +
+      '<text x="' + p.x + '" y="' + (p.y + 30) + '" text-anchor="middle" class="lineup-player-name">' + label + '</text></g>';
+  }
+
+  function fieldSVG(homeFormation, homePlayers, awayFormation, awayPlayers) {
+    var homePos = homeFormation ? computeFieldPositions(homeFormation, homePlayers, true) : [];
+    var awayPos = awayFormation ? computeFieldPositions(awayFormation, awayPlayers, false) : [];
+    var markers = homePos.map(function(p) { return playerMarkerSVG(p, 'lineup-home'); }).join('') +
+      awayPos.map(function(p) { return playerMarkerSVG(p, 'lineup-away'); }).join('');
+    return '<svg viewBox="0 0 400 600" class="lineup-field-svg">' +
+      '<rect x="0" y="0" width="400" height="600" class="lineup-field-bg" />' +
+      '<line x1="0" y1="300" x2="400" y2="300" class="lineup-field-line" />' +
+      '<circle cx="200" cy="300" r="50" class="lineup-field-line-fill" />' +
+      '<rect x="100" y="0" width="200" height="60" class="lineup-field-line-fill" />' +
+      '<rect x="100" y="540" width="200" height="60" class="lineup-field-line-fill" />' +
+      markers + '</svg>';
   }
 
   function lineupRowsHTML(players) {
@@ -1030,9 +1082,15 @@
       note.textContent = homeInjuries.length || awayInjuries.length ? 'Live from the backend.' : 'No injuries source connected yet.';
 
       if (data.lineups && data.lineups.length > 0) {
+        var homeL = data.lineups.find(function(l) { return l.team === currentHomeTeam; });
+        var awayL = data.lineups.find(function(l) { return l.team === currentAwayTeam; });
         var lhtml = '<h3>Confirmed lineups</h3>';
+        if (homeL && awayL && homeL.formation && awayL.formation) {
+          lhtml += '<div class="lineup-team-legend"><span><span class="lineup-legend-dot" style="background:var(--text-muted);"></span>' + currentHomeTeam + ' (' + homeL.formation + ')</span><span>' + awayL.formation + ' (' + currentAwayTeam + ')<span class="lineup-legend-dot" style="background:var(--accent-fill);margin-left:5px;margin-right:0;"></span></span></div>';
+          lhtml += '<div class="lineup-field-wrap">' + fieldSVG(homeL.formation, homeL.players, awayL.formation, awayL.players) + '</div>';
+        }
         data.lineups.forEach(function(l) {
-          lhtml += '<p style="font-weight:600;margin-top:10px;">' + l.team + (l.formation ? ' (' + l.formation + ')' : '') + '</p>' + lineupRowsHTML(l.players);
+          lhtml += '<p style="font-weight:600;margin-top:14px;">' + l.team + (l.formation ? ' (' + l.formation + ')' : '') + '</p>' + lineupRowsHTML(l.players);
         });
         document.getElementById('lineup-confirmed-card').innerHTML = lhtml;
       } else {
