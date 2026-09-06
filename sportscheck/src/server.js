@@ -347,7 +347,12 @@ app.get('/api/admin/history-backfill-status', (req, res) => {
 // directly in the page HTML, which is what fetch_season_history.py
 // reads. Far fewer requests too: one page per season, not one per day.
 let seasonHistoryRunning = false;
-let seasonHistoryProgress = { totalPushed: 0, seasonsCompleted: 0, startedAt: null, lastUpdate: null, lastLine: null };
+let seasonHistoryProgress = {
+  phase: null, // 'fixtures' | 'stats' | null
+  totalPushed: 0, seasonsCompleted: 0,
+  statsTotalToFetch: 0, statsTotalDone: 0,
+  startedAt: null, lastUpdate: null, lastLine: null,
+};
 
 app.post('/api/admin/start-season-history', (req, res) => {
   if (seasonHistoryRunning) {
@@ -356,7 +361,11 @@ app.post('/api/admin/start-season-history', (req, res) => {
   const numSeasons = parseInt(req.query.seasons, 10) || 6;
 
   seasonHistoryRunning = true;
-  seasonHistoryProgress = { totalPushed: 0, seasonsCompleted: 0, startedAt: new Date().toISOString(), lastUpdate: new Date().toISOString(), lastLine: null };
+  seasonHistoryProgress = {
+    phase: 'fixtures', totalPushed: 0, seasonsCompleted: 0,
+    statsTotalToFetch: 0, statsTotalDone: 0,
+    startedAt: new Date().toISOString(), lastUpdate: new Date().toISOString(), lastLine: null,
+  };
 
   const scriptPath = path.join(__dirname, '..', 'scraper', 'fetch_season_history.py');
   const ingestUrl = `http://localhost:${PORT}/api/admin/ingest-history-fixtures`;
@@ -379,16 +388,71 @@ app.post('/api/admin/start-season-history', (req, res) => {
   child.stderr.on('data', (data) => {
     console.error(`[season-history stderr] ${data.toString().trim()}`);
   });
-  child.on('close', (code) => {
+  child.on('close', async (code) => {
+    console.log(`[season-history] fixtures phase exited with code ${code}`);
+
+    // Chain into fetching match stats for everything just inserted —
+    // reuses the exact same query and fetch loop already proven by
+    // force-full-stats-catchup, rather than duplicating that logic in
+    // the Python script (which would need its own HTTP calls back into
+    // this server for no real benefit).
+    if (scheduledFetchRunning) {
+      // The hourly job or a manual catch-up happened to be running when
+      // fixtures finished — don't fight over the shared guard. The
+      // regular hourly job will pick up these fixtures on its own next
+      // tick anyway, since it queries for exactly this.
+      console.log('[season-history] skipping auto stats phase — another fetch is already running; the hourly job will pick these fixtures up on its next run.');
+      seasonHistoryRunning = false;
+      seasonHistoryProgress.phase = null;
+      return;
+    }
+
+    const needsDetail = findFixturesNeedingDetail(100000); // effectively uncapped
+    if (needsDetail.length === 0) {
+      console.log('[season-history] no matches need stats — fixtures phase found nothing new, or stats already exist.');
+      seasonHistoryRunning = false;
+      seasonHistoryProgress.phase = null;
+      return;
+    }
+
+    console.log(`[season-history] starting stats phase — ${needsDetail.length} matches, expect ~${Math.round(needsDetail.length * 4.8 / 60)} minutes.`);
+    seasonHistoryProgress.phase = 'stats';
+    seasonHistoryProgress.statsTotalToFetch = needsDetail.length;
+    seasonHistoryProgress.statsTotalDone = 0;
+
+    scheduledFetchRunning = true; // share the guard with the hourly job / manual catch-up
+    const base = `http://localhost:${PORT}`;
+    const statsProgressAdapter = {
+      get totalDone() { return seasonHistoryProgress.statsTotalDone; },
+      set totalDone(v) { seasonHistoryProgress.statsTotalDone = v; seasonHistoryProgress.lastUpdate = new Date().toISOString(); },
+      lastUpdate: null,
+    };
+    await fetchMatchDetailsForList(needsDetail, base, 'season-history', statsProgressAdapter);
+
+    console.log(`[season-history] stats phase complete — ${seasonHistoryProgress.statsTotalDone}/${needsDetail.length} fetched.`);
+    scheduledFetchRunning = false;
     seasonHistoryRunning = false;
-    console.log(`[season-history] process exited with code ${code}`);
+    seasonHistoryProgress.phase = null;
   });
   child.on('error', (err) => {
     seasonHistoryRunning = false;
+    seasonHistoryProgress.phase = null;
     console.error(`[season-history] failed to start: ${err.message}`);
   });
 
   res.json({ started: true, seasons: numSeasons });
+});
+
+// Diagnostic only — tests whether the results feed paginates, so the
+// season fetch can walk a whole season instead of only its first ~110
+// matches. Pass ?tournament=&seasonId=&country= to check other seasons.
+app.get('/api/admin/results-pages-debug', async (req, res) => {
+  const tournament = req.query.tournament || 'dYlOSQOD';
+  const seasonId = req.query.seasonId || '183';
+  const country = req.query.country || '198';
+  const scriptPath = path.join(__dirname, '..', 'scraper', 'debug_results_pages.py');
+  const result = await runPythonScript(scriptPath, [tournament, seasonId, country]);
+  res.json(result);
 });
 
 app.get('/api/admin/season-history-status', (req, res) => {

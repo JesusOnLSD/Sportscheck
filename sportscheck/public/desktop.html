@@ -1172,14 +1172,15 @@
       // Historical fixtures backfill — kicked off in the background, not
       // waited for, since it can take a while even at the current ±4 week
       // testing scope (and much longer once eventually widened to 5 years).
-      var historyRes = await fetch('/api/admin/start-history-backfill', { method: 'POST' });
-      var historyData = await historyRes.json();
-      parts.push(historyData.started ? 'history backfill started' : (historyData.error || historyData.reason || 'history backfill skipped'));
+      // The day-offset backfill that used to run here has been removed.
+      // It was confirmed to spend 42 minutes finding zero matches: that
+      // feed returns empty past roughly a year back, and it competed for
+      // the shared rate limit with the season fetch below, which is what
+      // actually retrieves historical fixtures. The route still exists
+      // (/api/admin/start-history-backfill) if it's ever wanted manually.
 
-      // Season-based historical fixtures. Separate from the day-offset
-      // backfill above because that one silently finds nothing past
-      // roughly a year back — this reads each past season's own results
-      // page instead, which is where the real 5-year history comes from.
+      // Season-based historical fixtures — reads each past season's own
+      // results page, where the matches are embedded directly.
       var seasonRes = await fetch('/api/admin/start-season-history?seasons=6', { method: 'POST' });
       var seasonData = await seasonRes.json();
       parts.push(seasonData.started ? 'season history started' : (seasonData.error || 'season history skipped'));

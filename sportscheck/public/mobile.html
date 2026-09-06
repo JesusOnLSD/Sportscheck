@@ -1128,12 +1128,9 @@
       parts.push(fixturesData.success ? fixturesData.stored + ' fixtures' : 'fixtures failed: ' + (fixturesData.error || 'unknown'));
       parts.push(scorersData.success ? scorersData.stored + ' scorers' : 'scorers failed: ' + (scorersData.error || 'unknown'));
 
-      var historyRes = await fetch('/api/admin/start-history-backfill', { method: 'POST' });
-      var historyData = await historyRes.json();
-      parts.push(historyData.started ? 'history started' : (historyData.error || historyData.reason || 'history skipped'));
-
-      // Season-based historical fixtures — see the desktop file for why
-      // this is separate from the day-offset backfill above.
+      // Day-offset backfill removed here — see the desktop file for why
+      // (it found zero matches over 42 minutes and competed for the rate
+      // limit with the season fetch, which is what actually works).
       var seasonRes = await fetch('/api/admin/start-season-history?seasons=6', { method: 'POST' });
       var seasonData = await seasonRes.json();
       parts.push(seasonData.started ? 'season history started' : (seasonData.error || 'season history skipped'));
