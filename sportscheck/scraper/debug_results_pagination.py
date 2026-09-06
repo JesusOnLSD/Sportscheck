@@ -20,24 +20,43 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     active_tournament = sys.argv[1] if len(sys.argv) > 1 else "dYlOSQOD"
     country_code = sys.argv[2] if len(sys.argv) > 2 else "198"
+    tournament_id = sys.argv[3] if len(sys.argv) > 3 else "jDTEm9zs"
+    stage_id = sys.argv[4] if len(sys.argv) > 4 else "I3O5jpB2"
 
     from flashscore_scraper.feed_client import fetch_feed
     from rate_limiter import wait_for_rate_limit
 
-    candidates = [0, 1, 20, 50, 100, 183, 200, 300, 380]
-    results = []
+    # First set: the original opaque-index pattern (kept for comparison)
+    index_candidates = [0, 1, 20, 50, 100, 183, 200, 300, 380]
+    # Second set: direct tournament/stage ID patterns, modeled on the
+    # already-proven to_/tt_ standings/scorers feed structure
+    direct_candidates = [
+        f"tr_1_{tournament_id}_{stage_id}",
+        f"tr_1_{tournament_id}_{stage_id}_1",
+        f"tr_{tournament_id}_{stage_id}",
+        f"tr_{tournament_id}_{stage_id}_1",
+        f"to_{tournament_id}_{stage_id}_1_1",
+        f"tr_1_{country_code}_{tournament_id}_{stage_id}_1_2_en_1",
+    ]
 
-    for n in candidates:
+    results = []
+    for n in index_candidates:
         feed_code = f"tr_1_{country_code}_{active_tournament}_{n}_1_2_en_1"
         wait_for_rate_limit()
         resp = fetch_feed(feed_code)
         results.append({
-            "n": n,
-            "feedCode": feed_code,
-            "status": resp.status_code,
-            "length": len(resp.text),
-            "first200Chars": resp.text[:200],
-            "matchCount": resp.text.count("~AA÷"),  # each match record starts with this marker
+            "type": "opaque-index", "n": n, "feedCode": feed_code, "status": resp.status_code,
+            "length": len(resp.text), "first200Chars": resp.text[:200],
+            "matchCount": resp.text.count("~AA÷"),
+        })
+
+    for feed_code in direct_candidates:
+        wait_for_rate_limit()
+        resp = fetch_feed(feed_code)
+        results.append({
+            "type": "direct-id", "n": None, "feedCode": feed_code, "status": resp.status_code,
+            "length": len(resp.text), "first200Chars": resp.text[:200],
+            "matchCount": resp.text.count("~AA÷"),
         })
 
     print(json.dumps({"success": True, "results": results}))

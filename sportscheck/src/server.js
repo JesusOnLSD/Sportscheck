@@ -108,8 +108,10 @@ app.get('/api/admin/fixtures-offset-debug', async (req, res) => {
 app.get('/api/admin/results-pagination-debug', async (req, res) => {
   const activeTournament = req.query.tournament || 'dYlOSQOD';
   const countryCode = req.query.country || '198';
+  const tournamentId = req.query.tournamentId || 'jDTEm9zs';
+  const stageId = req.query.stageId || 'I3O5jpB2';
   const scriptPath = path.join(__dirname, '..', 'scraper', 'debug_results_pagination.py');
-  const result = await runPythonScript(scriptPath, [activeTournament, countryCode]);
+  const result = await runPythonScript(scriptPath, [activeTournament, countryCode, tournamentId, stageId]);
   res.json(result);
 });
 
