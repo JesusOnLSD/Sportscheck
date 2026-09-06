@@ -339,6 +339,62 @@ app.get('/api/admin/history-backfill-status', (req, res) => {
   res.json({ running: historyBackfillRunning, ...historyBackfillProgress });
 });
 
+// Season-based historical fixtures. This exists because the day-offset
+// feed used by fetch_history.py silently returns nothing past roughly a
+// year back — it comes back empty rather than erroring, so a "5 year"
+// run there completes successfully having found almost nothing. Each
+// season's results page instead embeds its whole season of matches
+// directly in the page HTML, which is what fetch_season_history.py
+// reads. Far fewer requests too: one page per season, not one per day.
+let seasonHistoryRunning = false;
+let seasonHistoryProgress = { totalPushed: 0, seasonsCompleted: 0, startedAt: null, lastUpdate: null, lastLine: null };
+
+app.post('/api/admin/start-season-history', (req, res) => {
+  if (seasonHistoryRunning) {
+    return res.status(409).json({ error: 'A season history backfill is already running.' });
+  }
+  const numSeasons = parseInt(req.query.seasons, 10) || 6;
+
+  seasonHistoryRunning = true;
+  seasonHistoryProgress = { totalPushed: 0, seasonsCompleted: 0, startedAt: new Date().toISOString(), lastUpdate: new Date().toISOString(), lastLine: null };
+
+  const scriptPath = path.join(__dirname, '..', 'scraper', 'fetch_season_history.py');
+  const ingestUrl = `http://localhost:${PORT}/api/admin/ingest-history-fixtures`;
+  const child = spawn('python3', [scriptPath, ingestUrl, String(numSeasons)]);
+
+  child.stdout.on('data', (data) => {
+    data.toString().split('\n').filter(Boolean).forEach((line) => {
+      // The script already prefixes its own lines, so print as-is.
+      console.log(line);
+      seasonHistoryProgress.lastLine = line;
+      seasonHistoryProgress.lastUpdate = new Date().toISOString();
+      // The script prints a running total after each season's push;
+      // mirror it here so the status endpoint reflects real progress
+      // rather than only updating once at the very end.
+      const totalMatch = line.match(/running total (\d+)/);
+      if (totalMatch) seasonHistoryProgress.totalPushed = parseInt(totalMatch[1], 10);
+      if (line.includes('stored ')) seasonHistoryProgress.seasonsCompleted += 1;
+    });
+  });
+  child.stderr.on('data', (data) => {
+    console.error(`[season-history stderr] ${data.toString().trim()}`);
+  });
+  child.on('close', (code) => {
+    seasonHistoryRunning = false;
+    console.log(`[season-history] process exited with code ${code}`);
+  });
+  child.on('error', (err) => {
+    seasonHistoryRunning = false;
+    console.error(`[season-history] failed to start: ${err.message}`);
+  });
+
+  res.json({ started: true, seasons: numSeasons });
+});
+
+app.get('/api/admin/season-history-status', (req, res) => {
+  res.json({ running: seasonHistoryRunning, ...seasonHistoryProgress });
+});
+
 // The backfill script pushes here as it goes — localhost only, so no
 // external secret needed the way the old local-computer-to-Render push
 // required one; this never leaves the machine.

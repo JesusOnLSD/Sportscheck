@@ -1176,6 +1176,14 @@
       var historyData = await historyRes.json();
       parts.push(historyData.started ? 'history backfill started' : (historyData.error || historyData.reason || 'history backfill skipped'));
 
+      // Season-based historical fixtures. Separate from the day-offset
+      // backfill above because that one silently finds nothing past
+      // roughly a year back — this reads each past season's own results
+      // page instead, which is where the real 5-year history comes from.
+      var seasonRes = await fetch('/api/admin/start-season-history?seasons=6', { method: 'POST' });
+      var seasonData = await seasonRes.json();
+      parts.push(seasonData.started ? 'season history started' : (seasonData.error || 'season history skipped'));
+
       // If a specific match is currently loaded, also fetch its full detail
       // (stats/incidents/lineups, for Match Summary) and kick off both
       // teams' individual stats backfills — also background, not waited for.

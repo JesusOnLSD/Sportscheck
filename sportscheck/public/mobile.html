@@ -1132,6 +1132,12 @@
       var historyData = await historyRes.json();
       parts.push(historyData.started ? 'history started' : (historyData.error || historyData.reason || 'history skipped'));
 
+      // Season-based historical fixtures — see the desktop file for why
+      // this is separate from the day-offset backfill above.
+      var seasonRes = await fetch('/api/admin/start-season-history?seasons=6', { method: 'POST' });
+      var seasonData = await seasonRes.json();
+      parts.push(seasonData.started ? 'season history started' : (seasonData.error || 'season history skipped'));
+
       if (currentSoccerFixtureId && currentHomeTeam && currentAwayTeam) {
         status.textContent = parts.join(', ') + '. Fetching match detail…';
         var detailRes = await fetch('/api/admin/fetch-match-detail/' + currentSoccerFixtureId, { method: 'POST' });
