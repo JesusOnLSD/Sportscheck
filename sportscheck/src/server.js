@@ -102,6 +102,17 @@ app.get('/api/admin/fixtures-offset-debug', async (req, res) => {
   res.json(result);
 });
 
+// Diagnostic only — tests several candidate values for the unknown
+// pagination token in the historical results feed, to empirically find
+// the real pattern rather than guess from a single captured example.
+app.get('/api/admin/results-pagination-debug', async (req, res) => {
+  const activeTournament = req.query.tournament || 'dYlOSQOD';
+  const countryCode = req.query.country || '198';
+  const scriptPath = path.join(__dirname, '..', 'scraper', 'debug_results_pagination.py');
+  const result = await runPythonScript(scriptPath, [activeTournament, countryCode]);
+  res.json(result);
+});
+
 // Diagnostic only — shows every stored fixture for a league, unfiltered
 // by date, exactly as stored. Lets a "date X shows nothing" report be
 // checked against what actually landed, rather than guessing dates one
