@@ -92,6 +92,16 @@ app.get('/api/admin/historical-season-debug', async (req, res) => {
   res.json(result);
 });
 
+// Diagnostic only — tests whether the day-offset fixtures feed actually
+// returns real data at a specific far-back offset, or comes back empty.
+// Pass ?offset=-700 (defaults to -700, about 23 months back, if omitted).
+app.get('/api/admin/fixtures-offset-debug', async (req, res) => {
+  const offset = req.query.offset || '-700';
+  const scriptPath = path.join(__dirname, '..', 'scraper', 'debug_fixtures_offset.py');
+  const result = await runPythonScript(scriptPath, [offset]);
+  res.json(result);
+});
+
 // Diagnostic only — shows every stored fixture for a league, unfiltered
 // by date, exactly as stored. Lets a "date X shows nothing" report be
 // checked against what actually landed, rather than guessing dates one
